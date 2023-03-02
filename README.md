@@ -3,7 +3,7 @@
 ```py 
            Copyright 2023 Saksham Shekher
            
-[+] - Copying this site without giving star is crime   
-[+] - Follow me and enjoy all contents here 
+[+] - using this without giving star is crime   
+[+] - Don't forget to follow me 😉
 ```
         
