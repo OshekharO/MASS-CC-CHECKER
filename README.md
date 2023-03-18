@@ -16,7 +16,7 @@ This is a simple web-based tool for checking the validity of credit card numbers
 
 3. The tool will display the number of live, die, and unknown card numbers in real-time
 
-## 💽 Where To Host :-
+## 💽 Where To Host :
 
 1. https://www.freehostia.com
 
