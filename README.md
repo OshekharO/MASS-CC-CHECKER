@@ -32,9 +32,8 @@ Note: You can use any hosting.
 
 ## 🤗 Contact Me :
 
-• Check you did all things perfectly before contacting.
 
-• For any Support About Script contact [@OshekherO](https://t.me/OshekherO) at Telegram
+• For any Support About Script contact [issues](https://github.com/OshekharO/MASS-CC-CHECKER/issues/new)
 
 ---
 
