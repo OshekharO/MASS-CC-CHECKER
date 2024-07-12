@@ -18,9 +18,37 @@ $(document).ready(function() {
     function displayMessage(selector, message) {
         $(selector).prepend(message);
     }
+    
+    function isValidLuhn(number) {
+        let sum = 0;
+        let isEven = false;
+        
+        for (let i = number.length - 1; i >= 0; i--) {
+            let digit = parseInt(number.charAt(i), 10);
+            
+            if (isEven) {
+                digit *= 2;
+                if (digit > 9) {
+                    digit -= 9;
+                }
+            }
+            
+            sum += digit;
+            isEven = !isEven;
+        }
+        
+        return (sum % 10) === 0;
+    }
 
     async function processCC(cc) {
         try {
+            // Pre-check with Luhn algorithm
+            if (!isValidLuhn(cc.replace(/\D/g, ''))) {
+                displayMessage('.danger', `<div><b style='color:#FF0000;'>Invalid</b> | ${cc} (Failed Luhn check)</div>`);
+                updateCounter($die, 1);
+                return;
+            }
+
             const response = await $.post($form.attr('action'), { data: cc });
             const jsonResponse = JSON.parse(response);
             
@@ -43,6 +71,8 @@ $(document).ready(function() {
             }
         } catch (error) {
             console.error('Error processing CC:', error);
+            displayMessage('.danger', `<div><b style='color:#FF0000;'>Error</b> | ${cc} (Processing failed)</div>`);
+            updateCounter($unknown, 1);
         }
     }
 
