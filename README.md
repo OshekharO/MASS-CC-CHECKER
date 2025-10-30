@@ -8,9 +8,13 @@ This is a simple web-based tool for checking the validity of credit card numbers
 
 ### ✨ Features :
 
-• Check the validity of credit card number
+• Check the validity of credit card number with Luhn algorithm validation
 
 • Shows live, die, and unknown card number
+
+• Configurable validation settings via config.php
+
+• Support for cards with 13-19 digits
 
 ### 😶‍🌫️ Usage :
 
@@ -19,6 +23,15 @@ This is a simple web-based tool for checking the validity of credit card numbers
 2. Click the "START" button to begin the check
 
 3. The tool will display the number of live, die, and unknown card numbers in real-time
+
+### ⚙️ Configuration :
+
+Edit `config.php` to customize validation settings:
+
+- `ENABLE_LUHN_CHECK` - Enable/disable Luhn algorithm validation
+- `MIN_CARD_LENGTH` - Minimum card number length (default: 13)
+- `MAX_CARD_LENGTH` - Maximum card number length (default: 19)
+- `MIN_VALID_YEAR` - Minimum valid expiry year (default: 2024)
 
 ## 💽 Where To Host :
 
