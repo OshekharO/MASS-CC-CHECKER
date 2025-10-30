@@ -52,58 +52,12 @@
   <link href="style.css" rel="stylesheet">
 </head>
 <body>
-  <div class="fs-3 fw-bold mb-5 text-uppercase mx-auto text-center text-light">Credit Card Checker <span class="badge bg-info">v2.0</span></div>
-  
-  <!-- Statistics Dashboard -->
-  <div class="row mb-3">
-    <div class="col-md-3">
-      <div class="card bg-success text-white">
-        <div class="card-body text-center">
-          <h5 class="card-title">Live</h5>
-          <h2 class="live">0</h2>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card bg-danger text-white">
-        <div class="card-body text-center">
-          <h5 class="card-title">Die</h5>
-          <h2 class="die">0</h2>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card bg-warning text-white">
-        <div class="card-body text-center">
-          <h5 class="card-title">Unknown</h5>
-          <h2 class="unknown">0</h2>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card bg-info text-white">
-        <div class="card-body text-center">
-          <h5 class="card-title">Total</h5>
-          <h2 class="total">0</h2>
-        </div>
-      </div>
-    </div>
-  </div>
-  
+  <div class="fs-3 fw-bold mb-5 text-uppercase mx-auto text-center text-light">Credit Card Checker </div>
   <form method="post" action="api.php" role="form" id="form">
     <div class="box-body">
-      <div class="box-content"> 
-        <label for="cc" class="form-label fs-6 font-monospace badge bg-danger text-light">Card Numbers (Format: CARD|MM|YYYY|CVV)</label>
-        <div class="mb-2">
-          <small class="text-light">Example: 4532015112830366|12|2025|123 (one per line)</small>
-        </div>
-        <div> <textarea class="form-control" rows="10" id="cc" name="cc" title="4532015112830366|12|2025|123" placeholder="4532015112830366|12|2025|123&#10;5425233430109903|08|2026|456" required></textarea> </div>
-        <div class="button text-center mb-3 mt-3"> 
-          <button type="submit" name="valid" class="btn btn-outline-success text-light">START</button> 
-          <button type="button" id="stop" class="btn btn-outline-danger text-light" disabled>STOP</button> 
-          <button type="button" id="clear" class="btn btn-outline-warning text-light">CLEAR</button>
-          <button type="button" id="export" class="btn btn-outline-info text-light">EXPORT</button>
-        </div>
+      <div class="box-content"> <label for="cc" class="form-label fs-6 font-monospace badge bg-danger text-light">Card Numbers</label>
+        <div> <textarea class="form-control" rows="10" id="cc" name="cc" title="53012724539xxxxx|05|2022|653" placeholder="53012724539xxxxx|05|2022|653" required></textarea> </div>
+        <div class="button text-center mb-3 mt-3"> <button type="submit" name="valid" class="btn btn-outline-success text-light">START</button> <button type="button" id="stop" class="btn btn-outline-danger text-light" disabled>STOP</button> </div>
       </div>
     </div> <!-- Info success -->
     <div class="box-title">
@@ -136,41 +90,22 @@
     $(document).ready(function() {
         const $validButton = $('button[name="valid"]');
         const $stopButton = $('button[id="stop"]');
-        const $clearButton = $('button[id="clear"]');
-        const $exportButton = $('button[id="export"]');
         const $ccInput = $('#cc');
         const $form = $('#form');
         const $live = $('.live');
         const $die = $('.die');
         const $unknown = $('.unknown');
-        const $total = $('.total');
         const $info = $('.info');
         
         let isProcessing = false;
         let shouldStop = false;
-        let results = {
-            live: [],
-            die: [],
-            unknown: []
-        };
     
         function updateCounter($element, value) {
             $element.text(parseInt($element.text()) + value);
         }
-        
-        function updateTotal() {
-            const total = parseInt($live.text()) + parseInt($die.text()) + parseInt($unknown.text());
-            $total.text(total);
-        }
     
-        function displayMessage(selector, message, cardData) {
+        function displayMessage(selector, message) {
             $(selector).prepend(message);
-            
-            // Store result for export
-            const resultType = selector.replace('.', '');
-            if (results[resultType]) {
-                results[resultType].push(cardData);
-            }
         }
     
         // Improved Luhn algorithm check
@@ -197,57 +132,46 @@
     
         async function processCC(cc) {
             try {
+                // Pre-check with Luhn algorithm
+                if (!isValidLuhn(cc.replace(/\D/g, ''))) {
+                    displayMessage('.danger', `<div><b style='color:#FF0000;'>Invalid</b> | ${cc} (Failed Luhn check)</div>`);
+                    updateCounter($die, 1);
+                    return;
+                }
+    
                 const response = await $.post($form.attr('action'), { data: cc });
                 const jsonResponse = JSON.parse(response);
                 
                 switch(jsonResponse.error) {
                     case 1:
-                        displayMessage('.success', jsonResponse.msg, cc);
+                        displayMessage('.success', jsonResponse.msg);
                         updateCounter($live, 1);
                         break;
                     case 2:
-                        displayMessage('.danger', jsonResponse.msg, cc);
+                        displayMessage('.danger', jsonResponse.msg);
                         updateCounter($die, 1);
                         break;
                     case 3:
-                        displayMessage('.warning', jsonResponse.msg, cc);
+                        displayMessage('.warning', jsonResponse.msg);
                         updateCounter($unknown, 1);
                         break;
                     case 4:
                         $info.show().prepend(jsonResponse.msg + '<br>');
                         break;
-                    case 5:
-                        alert(jsonResponse.msg.replace(/<[^>]*>/g, ''));
-                        shouldStop = true;
-                        break;
                 }
-                
-                updateTotal();
             } catch (error) {
                 console.error('Error processing CC:', error);
-                displayMessage('.danger', `<div><b style='color:#FF0000;'>Error</b> | ${cc} (Processing failed)</div>`, cc);
+                displayMessage('.danger', `<div><b style='color:#FF0000;'>Error</b> | ${cc} (Processing failed)</div>`);
                 updateCounter($unknown, 1);
-                updateTotal();
             }
         }
     
         async function processAllCC(ccList) {
-            const total = ccList.length;
-            let processed = 0;
-            
             for (let cc of ccList) {
                 if (shouldStop) break;
-                
                 await processCC(cc.trim());
-                processed++;
-                
-                // Update progress
-                document.title = `Processing ${processed}/${total} - CC Checker`;
-                
                 await new Promise(resolve => setTimeout(resolve, 100)); // Small delay between requests
             }
-            
-            document.title = 'Credit Card Checker';
             finishProcessing();
         }
     
@@ -257,7 +181,6 @@
             $validButton.attr('disabled', true);
             $stopButton.attr('disabled', false);
             $ccInput.attr('disabled', true);
-            $clearButton.attr('disabled', true);
         }
     
         function finishProcessing() {
@@ -265,39 +188,6 @@
             $validButton.attr('disabled', false);
             $stopButton.attr('disabled', true);
             $ccInput.attr('disabled', false).val('');
-            $clearButton.attr('disabled', false);
-        }
-        
-        function clearResults() {
-            $live.text('0');
-            $die.text('0');
-            $unknown.text('0');
-            $total.text('0');
-            $('.success, .danger, .warning').empty();
-            results = { live: [], die: [], unknown: [] };
-            $ccInput.val('');
-        }
-        
-        function exportResults() {
-            const exportData = {
-                timestamp: new Date().toISOString(),
-                summary: {
-                    live: parseInt($live.text()),
-                    die: parseInt($die.text()),
-                    unknown: parseInt($unknown.text()),
-                    total: parseInt($total.text())
-                },
-                results: results
-            };
-            
-            const dataStr = JSON.stringify(exportData, null, 2);
-            const dataBlob = new Blob([dataStr], {type: 'application/json'});
-            const url = URL.createObjectURL(dataBlob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `cc-checker-results-${Date.now()}.json`;
-            link.click();
-            URL.revokeObjectURL(url);
         }
     
         $form.submit(function(e) {
@@ -306,7 +196,7 @@
     
             const ccList = $ccInput.val().split('\n').filter(cc => cc.trim() !== '');
             if (ccList.length === 0) {
-                alert('Error: No valid input. Please enter credit card numbers.');
+                $info.show().html('<b>Error: No valid input</b>');
                 return;
             }
     
@@ -316,31 +206,6 @@
     
         $stopButton.click(function() {
             shouldStop = true;
-        });
-        
-        $clearButton.click(function() {
-            if (confirm('Are you sure you want to clear all results?')) {
-                clearResults();
-            }
-        });
-        
-        $exportButton.click(function() {
-            if (parseInt($total.text()) === 0) {
-                alert('No results to export. Please check some cards first.');
-                return;
-            }
-            exportResults();
-        });
-        
-        // Keyboard shortcuts
-        $(document).keydown(function(e) {
-            if (e.ctrlKey && e.key === 'Enter') {
-                if (!isProcessing) {
-                    $form.submit();
-                }
-            } else if (e.key === 'Escape' && isProcessing) {
-                shouldStop = true;
-            }
         });
     });
   </script>
