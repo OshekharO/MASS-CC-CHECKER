@@ -56,7 +56,7 @@
   <form method="post" action="api.php" role="form" id="form">
     <div class="box-body">
       <div class="box-content"> <label for="cc" class="form-label fs-6 font-monospace badge bg-danger text-light">Card Numbers</label>
-        <div> <textarea class="form-control" rows="10" id="cc" name="cc" title="Card format: card_number|MM|YYYY|CVV (13-19 digits)" placeholder="4532015112830366|05|2025|123&#10;378282246310005|12|2026|1234&#10;6011111111111117|08|2027|456" required></textarea> </div>
+        <div> <textarea class="form-control" rows="10" id="cc" name="cc" title="Card format: card_number|MM|YYYY|CVV (13-19 digits)" placeholder="4111111111111111|05|2025|123&#10;378282246310005|12|2026|1234&#10;6011111111111117|08|2027|456" required></textarea> </div>
         <div class="button text-center mb-3 mt-3"> <button type="submit" name="valid" class="btn btn-outline-success text-light">START</button> <button type="button" id="stop" class="btn btn-outline-danger text-light" disabled>STOP</button> </div>
       </div>
     </div> <!-- Info success -->

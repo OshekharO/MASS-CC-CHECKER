@@ -17,8 +17,8 @@ define('CVV_MIN_LENGTH', 3);    // Standard CVV length
 define('CVV_MAX_LENGTH', 4);    // American Express CVV length
 
 // Expiry validation settings
-define('MIN_EXPIRY_YEAR', 2024);        // Minimum valid expiry year
-define('MAX_EXPIRY_MONTH', 12);         // Maximum month value
+define('MIN_EXPIRY_YEAR', (int)date('Y'));  // Minimum valid expiry year (current year)
+define('MAX_EXPIRY_MONTH', 12);             // Maximum month value
 
 // Validation settings
 define('ENABLE_LUHN_CHECK', true);      // Enable/disable Luhn algorithm validation

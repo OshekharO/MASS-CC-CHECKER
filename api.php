@@ -120,8 +120,14 @@ if (empty($data)) {
     exit;
 }
 
-// Updated regex to support 13-19 digit card numbers and 3-4 digit CVV
-$pattern = "/^(\\d{" . CARD_MIN_LENGTH . "," . CARD_MAX_LENGTH . "})\\|(\\d{2})\\|(\\d{4})\\|(\\d{" . CVV_MIN_LENGTH . "," . CVV_MAX_LENGTH . "})$/";
+// Build regex pattern to support 13-19 digit card numbers and 3-4 digit CVV
+$pattern = sprintf(
+    "/^(\\d{%d,%d})\\|(\\d{2})\\|(\\d{4})\\|(\\d{%d,%d})$/",
+    CARD_MIN_LENGTH,
+    CARD_MAX_LENGTH,
+    CVV_MIN_LENGTH,
+    CVV_MAX_LENGTH
+);
 
 if (!preg_match($pattern, $data, $matches)) {
     sendResponse(4, '<b>' . MSG_INVALID_FORMAT . '</b> | Expected format: card_number|MM|YYYY|CVV');
@@ -135,7 +141,8 @@ $expm = $datas[1];
 $expy = $datas[2];
 $cvv = $datas[3];
 
-$format = $num . "|" . $expm . "|" . $expy . "|" . $cvv;
+// Sanitize format string for output
+$format = htmlspecialchars($num . "|" . $expm . "|" . $expy . "|" . $cvv, ENT_QUOTES, 'UTF-8');
 
 // Validate card data
 $validationResult = validateCardData($datas);
