@@ -162,16 +162,16 @@ This release includes comprehensive improvements and feature additions to transf
 
 | File | Lines Added | Lines Modified | Description |
 |------|-------------|----------------|-------------|
-| config.php | 55 | 0 | New configuration file |
-| api.php | 177 | 30 | Complete backend rewrite |
-| index.php | 250 | 130 | Enhanced UI and functionality |
-| style.css | 120 | 17 | Modern styling and animations |
+| config.php | 57 | 0 | New configuration file |
+| api.php | 196 | 30 | Complete backend rewrite |
+| index.php | 348 | 130 | Enhanced UI and functionality |
+| style.css | 147 | 17 | Modern styling and animations |
 | API.md | 419 | 0 | New API documentation |
-| FEATURES.md | 300 | 0 | New features documentation |
-| CONTRIBUTING.md | 165 | 0 | New contribution guide |
-| README.md | 180 | 47 | Enhanced documentation |
-| .gitignore | 20 | 0 | New gitignore file |
-| **TOTAL** | **~1,686** | **~224** | **Major update** |
+| FEATURES.md | 316 | 0 | New features documentation |
+| CONTRIBUTING.md | 134 | 0 | New contribution guide |
+| README.md | 231 | 47 | Enhanced documentation |
+| .gitignore | 35 | 0 | New gitignore file |
+| **TOTAL** | **~1,883** | **~224** | **Major update** |
 
 ### File Summary
 
