@@ -56,7 +56,7 @@
   <form method="post" action="api.php" role="form" id="form">
     <div class="box-body">
       <div class="box-content"> <label for="cc" class="form-label fs-6 font-monospace badge bg-danger text-light">Card Numbers</label>
-        <div> <textarea class="form-control" rows="10" id="cc" name="cc" title="53012724539xxxxx|05|2022|653" placeholder="53012724539xxxxx|05|2022|653" required></textarea> </div>
+        <div> <textarea class="form-control" rows="10" id="cc" name="cc" title="Card format: card_number|MM|YYYY|CVV (13-19 digits)" placeholder="4532015112830366|05|2025|123&#10;378282246310005|12|2026|1234&#10;6011111111111117|08|2027|456" required></textarea> </div>
         <div class="button text-center mb-3 mt-3"> <button type="submit" name="valid" class="btn btn-outline-success text-light">START</button> <button type="button" id="stop" class="btn btn-outline-danger text-light" disabled>STOP</button> </div>
       </div>
     </div> <!-- Info success -->
@@ -108,8 +108,21 @@
             $(selector).prepend(message);
         }
     
+        // Configuration
+        const CARD_MIN_LENGTH = 13;
+        const CARD_MAX_LENGTH = 19;
+        const CVV_MIN_LENGTH = 3;
+        const CVV_MAX_LENGTH = 4;
+        
         // Improved Luhn algorithm check
         function isValidLuhn(number) {
+            // Remove non-digits
+            number = number.replace(/\D/g, '');
+            
+            if (!number || number.length < CARD_MIN_LENGTH || number.length > CARD_MAX_LENGTH) {
+                return false;
+            }
+            
             let sum = 0;
             let isEven = false;
             
@@ -129,12 +142,66 @@
             
             return (sum % 10) === 0;
         }
+        
+        // Validate card format and components
+        function validateCardFormat(cc) {
+            // Expected format: card_number|MM|YYYY|CVV
+            const parts = cc.split('|');
+            
+            if (parts.length !== 4) {
+                return { valid: false, error: 'Invalid format. Expected: card_number|MM|YYYY|CVV' };
+            }
+            
+            const [cardNum, month, year, cvv] = parts;
+            
+            // Validate card number
+            if (!/^\d+$/.test(cardNum) || cardNum.length < CARD_MIN_LENGTH || cardNum.length > CARD_MAX_LENGTH) {
+                return { valid: false, error: `Card number must be ${CARD_MIN_LENGTH}-${CARD_MAX_LENGTH} digits` };
+            }
+            
+            // Validate month
+            const monthInt = parseInt(month, 10);
+            if (!/^\d{2}$/.test(month) || monthInt < 1 || monthInt > 12) {
+                return { valid: false, error: 'Month must be 01-12' };
+            }
+            
+            // Validate year
+            const yearInt = parseInt(year, 10);
+            const currentYear = new Date().getFullYear();
+            if (!/^\d{4}$/.test(year) || yearInt < currentYear) {
+                return { valid: false, error: `Year must be ${currentYear} or later` };
+            }
+            
+            // Check if expired
+            const currentMonth = new Date().getMonth() + 1;
+            if (yearInt === currentYear && monthInt < currentMonth) {
+                return { valid: false, error: 'Card has expired' };
+            }
+            
+            // Validate CVV
+            if (!/^\d+$/.test(cvv) || cvv.length < CVV_MIN_LENGTH || cvv.length > CVV_MAX_LENGTH) {
+                return { valid: false, error: `CVV must be ${CVV_MIN_LENGTH}-${CVV_MAX_LENGTH} digits` };
+            }
+            
+            return { valid: true };
+        }
     
         async function processCC(cc) {
             try {
+                // Validate format first
+                const formatCheck = validateCardFormat(cc);
+                if (!formatCheck.valid) {
+                    displayMessage('.danger', `<div><b style='color:#FF0000;'>Invalid</b> | ${cc} | ${formatCheck.error}</div>`);
+                    updateCounter($die, 1);
+                    return;
+                }
+                
+                // Extract card number for Luhn check
+                const cardNumber = cc.split('|')[0];
+                
                 // Pre-check with Luhn algorithm
-                if (!isValidLuhn(cc.replace(/\D/g, ''))) {
-                    displayMessage('.danger', `<div><b style='color:#FF0000;'>Invalid</b> | ${cc} (Failed Luhn check)</div>`);
+                if (!isValidLuhn(cardNumber)) {
+                    displayMessage('.danger', `<div><b style='color:#FF0000;'>Invalid</b> | ${cc} | Failed Luhn algorithm check</div>`);
                     updateCounter($die, 1);
                     return;
                 }
@@ -156,12 +223,13 @@
                         updateCounter($unknown, 1);
                         break;
                     case 4:
-                        $info.show().prepend(jsonResponse.msg + '<br>');
+                        displayMessage('.danger', `<div><b style='color:#FF0000;'>Error</b> | ${cc} | ${jsonResponse.msg}</div>`);
+                        updateCounter($die, 1);
                         break;
                 }
             } catch (error) {
                 console.error('Error processing CC:', error);
-                displayMessage('.danger', `<div><b style='color:#FF0000;'>Error</b> | ${cc} (Processing failed)</div>`);
+                displayMessage('.danger', `<div><b style='color:#FF0000;'>Error</b> | ${cc} | Processing failed</div>`);
                 updateCounter($unknown, 1);
             }
         }
