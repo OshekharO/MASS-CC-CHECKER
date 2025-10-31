@@ -12,6 +12,22 @@ This is a simple web-based tool for checking the validity of credit card numbers
 
 • Shows live, die, and unknown card number
 
+• **BIN (Bank Identification Number) detection** - Automatically identifies card brand (Visa, Mastercard, Amex, etc.)
+
+• **Card brand detection** - Recognizes major card types and validates CVV length accordingly
+
+• **Rate limiting** - Prevents abuse with configurable request limits
+
+• **Copy to clipboard** - Easily copy results for each category (Live, Die, Unknown)
+
+• **Export results** - Download all results as a text file
+
+• **Progress tracking** - Real-time progress bar and statistics (processing rate, ETA)
+
+• **Clear results** - One-click button to clear all results
+
+• **Enhanced validation** - Better error handling and input validation
+
 • Configurable validation settings via config.php
 
 • Support for cards with 13-19 digits
@@ -28,10 +44,27 @@ This is a simple web-based tool for checking the validity of credit card numbers
 
 Edit `config.php` to customize validation settings:
 
+**Card Validation:**
 - `ENABLE_LUHN_CHECK` - Enable/disable Luhn algorithm validation
 - `MIN_CARD_LENGTH` - Minimum card number length (default: 13)
 - `MAX_CARD_LENGTH` - Maximum card number length (default: 19)
 - `MIN_VALID_YEAR` - Minimum valid expiry year (default: 2024)
+
+**Security Settings:**
+- `ENABLE_RATE_LIMITING` - Enable/disable rate limiting (default: true)
+- `MAX_REQUESTS_PER_MINUTE` - Maximum requests per minute per IP (default: 60)
+- `RATE_LIMIT_DURATION` - Rate limit duration in seconds (default: 60)
+
+**Feature Toggles:**
+- `ENABLE_BIN_DETECTION` - Enable/disable BIN detection (default: true)
+- `ENABLE_CARD_BRAND_DETECTION` - Enable/disable card brand detection (default: true)
+
+**Processing Settings:**
+- `PROCESSING_DELAY_MS` - Delay between requests in milliseconds (default: 100)
+
+**Logging:**
+- `ENABLE_ERROR_LOGGING` - Enable/disable error logging (default: true)
+- `LOG_FILE_PATH` - Path to log file (default: logs/error.log)
 
 ## 💽 Where To Host :
 

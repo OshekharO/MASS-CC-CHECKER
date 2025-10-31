@@ -14,3 +14,40 @@ body {
   position: relative;
   margin: 2.5rem;
 }
+
+/* Copy button styling */
+.copy-btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.copy-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+/* Progress bar enhancements */
+#progress-container {
+  margin-top: 1rem;
+}
+
+.progress {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.progress-bar {
+  font-size: 0.875rem;
+  font-weight: bold;
+}
+
+/* Statistics styling */
+#stats-summary {
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}
+
+/* Button group spacing */
+.button .btn {
+  margin: 0 0.25rem;
+}
