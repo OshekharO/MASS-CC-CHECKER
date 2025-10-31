@@ -218,6 +218,7 @@ if (!empty($data)) {
                 'error' => 2,
                 'msg' => "<div><b style='color:#FF0000;'>Die</b> | " . $format . "$binInfo | Failed Luhn check</div>"
             ]);
+            exit;
         } elseif ($expy >= MIN_VALID_YEAR && $expm >= 1 && $expm <= 12) {
             $rand = rand(1, 3);
             if ($rand == 1) {

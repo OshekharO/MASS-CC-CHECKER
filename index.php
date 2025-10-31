@@ -39,6 +39,17 @@
     }
   </script>
   
+  <?php
+  // Load configuration
+  if (file_exists('config.php')) {
+      require_once 'config.php';
+  }
+  // Set default if not defined
+  if (!defined('PROCESSING_DELAY_MS')) {
+      define('PROCESSING_DELAY_MS', 100);
+  }
+  ?>
+  
   <!-- Standard Favicon -->
 <link rel="icon" href="../assets/icons/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="../assets/icons/favicon-32x32.png">
@@ -132,8 +143,8 @@
         let processedCards = 0;
         let startTime = 0;
         
-        // Get processing delay from config (default 100ms)
-        const processingDelay = 100;
+        // Get processing delay from config
+        const processingDelay = <?php echo PROCESSING_DELAY_MS; ?>;
     
         function updateCounter($element, value) {
             $element.text(parseInt($element.text()) + value);
