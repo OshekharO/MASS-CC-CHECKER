@@ -1,6 +1,16 @@
 # CC Checker
 
-This is a simple web-based tool for checking the validity of credit card numbers. The tool is built using HTML, CSS, and Bootstrap for the front-end, and PHP for the back-end.
+A modern, minimalist web-based tool for validating credit card numbers. Built with a focus on user experience, responsiveness, and robust bank-algorithm validation.
+
+### 🎨 Design Features :
+
+• **Minimalist & Intuitive Interface** - Clean, modern dark theme with smooth animations
+
+• **Fully Responsive** - Works seamlessly on desktop, tablet, and mobile devices
+
+• **Smooth Animations** - CSS transitions and animations for enhanced UX
+
+• **Progress Tracking** - Real-time progress bar and statistics during validation
 
 ### 🍥 Similar :
 
@@ -8,13 +18,30 @@ This is a simple web-based tool for checking the validity of credit card numbers
 
 ### ✨ Features :
 
-• Check the validity of credit card number with Luhn algorithm validation
+• **Luhn Algorithm Validation** - ISO/IEC 7812-1 compliant checksum verification
 
-• Shows live, die, and unknown card number
+• **Card Type Detection** - Automatic recognition of Visa, Mastercard, Amex, Discover, Diners, JCB, UnionPay, and Maestro
 
-• Configurable validation settings via config.php
+• **Comprehensive Validation** - Card length, CVV, and expiry date validation based on card type
 
-• Support for cards with 13-19 digits
+• **Real-time Results** - Shows live, die, and unknown card numbers instantly
+
+• **Configurable Settings** - Customize validation via config.php
+
+• **Bulk Processing** - Check multiple cards at once with stop functionality
+
+### 🏦 Supported Card Types :
+
+| Card Type | IIN/BIN Range | Lengths | CVV |
+|-----------|---------------|---------|-----|
+| Visa | 4xxx | 13, 16, 19 | 3 |
+| Mastercard | 51-55xx, 2221-2720 | 16 | 3 |
+| American Express | 34xx, 37xx | 15 | 4 |
+| Discover | 6011, 644-649, 65 | 16, 19 | 3 |
+| Diners Club | 300-305, 36, 38 | 14, 16, 19 | 3 |
+| JCB | 2131, 1800, 35 | 16-19 | 3 |
+| UnionPay | 62xx | 16-19 | 3 |
+| Maestro | Various | 12-19 | 3 |
 
 ### 😶‍🌫️ Usage :
 
@@ -23,6 +50,8 @@ This is a simple web-based tool for checking the validity of credit card numbers
 2. Click the "START" button to begin the check
 
 3. The tool will display the number of live, die, and unknown card numbers in real-time
+
+4. Use the "STOP" button to halt processing at any time
 
 ### ⚙️ Configuration :
 
