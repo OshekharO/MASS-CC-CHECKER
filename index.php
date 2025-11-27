@@ -333,10 +333,16 @@
       /**
        * Converts 2-digit year (YY) to 4-digit year (YYYY)
        * @param {string} year - Year string (2 or 4 digits)
-       * @returns {number} - Full 4-digit year
+       * @returns {number|null} - Full 4-digit year, or null if invalid
        */
       function convertToFullYear(year) {
         const yearStr = String(year).trim();
+        
+        // Validate that year contains only digits
+        if (!/^\d+$/.test(yearStr)) {
+          return null;
+        }
+        
         const yearNum = parseInt(yearStr, 10);
         
         // If already 4 digits, return as-is
@@ -344,9 +350,14 @@
           return yearNum;
         }
         
-        // For 2-digit year: assume current century (2000s)
-        // Credit cards typically have expiry within 10 years
-        return 2000 + yearNum;
+        // For 2-digit year: add current century
+        // Credit cards typically have expiry within 10 years, so 2000s is safe
+        if (yearStr.length === 2) {
+          return 2000 + yearNum;
+        }
+        
+        // Invalid length (not 2 or 4 digits)
+        return null;
       }
 
       /**
@@ -366,7 +377,11 @@
           return { valid: false, message: 'Invalid month (01-12)' };
         }
 
-        if (isNaN(yearNum) || yearNum < currentYear) {
+        if (yearNum === null) {
+          return { valid: false, message: 'Invalid year format (use YY or YYYY)' };
+        }
+
+        if (yearNum < currentYear) {
           return { valid: false, message: 'Card expired (year)' };
         }
 
