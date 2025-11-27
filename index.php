@@ -73,7 +73,7 @@
             aria-describedby="format-help"
           ></textarea>
           <small id="format-help" class="format-help">
-            Format: card_number|MM|YY|CVV or card_number|MM|YYYY|CVV (one per line)
+            Format: card_number|MM|YYYY|CVV (one per line)
           </small>
           
           <!-- Progress Bar -->
