@@ -72,7 +72,7 @@
             required
             aria-describedby="format-help"
           ></textarea>
-          <small id="format-help" class="text-muted d-block mt-2" style="color: var(--text-muted) !important; font-size: 11px;">
+          <small id="format-help" class="format-help">
             Format: card_number|MM|YYYY|CVV (one per line)
           </small>
           

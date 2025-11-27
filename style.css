@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 /* =======================================================
 *   Author: Saksham Shekher
 *   Only For Educational Purpose
@@ -444,6 +444,14 @@ body {
 .form-control:focus-visible {
   outline: 2px solid var(--accent-info);
   outline-offset: 2px;
+}
+
+/* Format help text */
+.format-help {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 /* Info message styling */

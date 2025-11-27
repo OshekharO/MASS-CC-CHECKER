@@ -258,7 +258,7 @@ if (!isset($_POST["data"]) || empty($_POST["data"])) {
 $data = $_POST["data"];
 
 // Splitting the data - support flexible card lengths
-$pattern = "/^([\\d]{" . MIN_CARD_LENGTH . "," . MAX_CARD_LENGTH . "})\\|([\\d]{1,2})\\|([\\d]{4})\\|([\\d]{3,4})$/";
+$pattern = "/^([\\d]{" . MIN_CARD_LENGTH . "," . MAX_CARD_LENGTH . "})\\|([\\d]{2})\\|([\\d]{4})\\|([\\d]{3,4})$/";
 
 if (!preg_match($pattern, $data, $matches)) {
     echo jsonResponse(4, "<div><b style='color:#ef4444;'>Invalid Format</b> | Please use format: card_number|MM|YYYY|CVV</div>");
