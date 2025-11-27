@@ -67,13 +67,13 @@
             rows="8" 
             id="cc" 
             name="cc" 
-            title="Format: card_number|MM|YYYY|CVV" 
-            placeholder="5301272453912345|05|2025|653&#10;4111111111111111|12|2026|123&#10;378282246310005|08|2027|1234"
+            title="Format: card_number|MM|YY|CVV or card_number|MM|YYYY|CVV" 
+            placeholder="5301272453912345|05|25|653&#10;4111111111111111|12|2026|123&#10;378282246310005|08|27|1234"
             required
             aria-describedby="format-help"
           ></textarea>
           <small id="format-help" class="format-help">
-            Format: card_number|MM|YYYY|CVV (one per line)
+            Format: card_number|MM|YY|CVV or card_number|MM|YYYY|CVV (one per line)
           </small>
           
           <!-- Progress Bar -->
@@ -331,14 +331,33 @@
       }
 
       /**
+       * Converts 2-digit year (YY) to 4-digit year (YYYY)
+       * @param {string} year - Year string (2 or 4 digits)
+       * @returns {number} - Full 4-digit year
+       */
+      function convertToFullYear(year) {
+        const yearStr = String(year).trim();
+        const yearNum = parseInt(yearStr, 10);
+        
+        // If already 4 digits, return as-is
+        if (yearStr.length === 4) {
+          return yearNum;
+        }
+        
+        // For 2-digit year: assume current century (2000s)
+        // Credit cards typically have expiry within 10 years
+        return 2000 + yearNum;
+      }
+
+      /**
        * Validates expiry date
        * @param {string} month - Expiry month (MM)
-       * @param {string} year - Expiry year (YYYY)
+       * @param {string} year - Expiry year (YY or YYYY)
        * @returns {object} - Validation result with status and message
        */
       function validateExpiry(month, year) {
         const monthNum = parseInt(month, 10);
-        const yearNum = parseInt(year, 10);
+        const yearNum = convertToFullYear(year);
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
@@ -365,7 +384,7 @@
 
       /**
        * Comprehensive card validation using bank algorithm standards
-       * @param {string} cardData - Card data in format: number|MM|YYYY|CVV
+       * @param {string} cardData - Card data in format: number|MM|YY|CVV or number|MM|YYYY|CVV
        * @returns {object} - Validation result
        */
       function validateCard(cardData) {
@@ -380,13 +399,18 @@
         // Parse card data
         const parts = cardData.split('|');
         if (parts.length !== 4) {
-          result.errors.push('Invalid format. Use: number|MM|YYYY|CVV');
+          result.errors.push('Invalid format. Use: number|MM|YY|CVV or number|MM|YYYY|CVV');
           return result;
         }
 
         const [number, month, year, cvv] = parts.map(p => p.trim());
         const cleanNumber = number.replace(/\D/g, '');
         result.cardNumber = cleanNumber;
+
+        // Validate year format (2 or 4 digits)
+        if (!/^\d{2}$/.test(year) && !/^\d{4}$/.test(year)) {
+          result.errors.push('Invalid year format (use YY or YYYY)');
+        }
 
         // Detect card type
         result.cardType = detectCardType(cleanNumber);
