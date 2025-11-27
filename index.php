@@ -422,11 +422,6 @@
         const cleanNumber = number.replace(/\D/g, '');
         result.cardNumber = cleanNumber;
 
-        // Validate year format (2 or 4 digits)
-        if (!/^\d{2}$/.test(year) && !/^\d{4}$/.test(year)) {
-          result.errors.push('Invalid year format (use YY or YYYY)');
-        }
-
         // Detect card type
         result.cardType = detectCardType(cleanNumber);
 
