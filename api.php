@@ -163,19 +163,53 @@ function isValidCVV($cvv, $cardType) {
 }
 
 /**
+ * Convert 2-digit year (YY) to 4-digit year (YYYY)
+ * Uses current century for credit card expiry (cards valid for ~10 years)
+ * @param string $year Year string (2 or 4 digits)
+ * @return int|null Full 4-digit year, or null if invalid
+ */
+function convertToFullYear($year) {
+    // Validate that year contains only digits
+    if (!preg_match('/^\d+$/', $year)) {
+        return null;
+    }
+    
+    $yearNum = intval($year);
+    $yearLen = strlen($year);
+    
+    // If already 4 digits, return as-is
+    if ($yearLen === 4) {
+        return $yearNum;
+    }
+    
+    // For 2-digit year: add current century
+    // Credit cards typically have expiry within 10 years, so 2000s is safe
+    if ($yearLen === 2) {
+        return 2000 + $yearNum;
+    }
+    
+    // Invalid length (not 2 or 4 digits)
+    return null;
+}
+
+/**
  * Validate expiry date
  * @param string $month Expiry month (MM)
- * @param string $year Expiry year (YYYY)
+ * @param string $year Expiry year (YY or YYYY)
  * @return array Validation result with 'valid' and 'message'
  */
 function validateExpiry($month, $year) {
     $monthNum = intval($month);
-    $yearNum = intval($year);
+    $yearNum = convertToFullYear($year);
     $currentYear = intval(date('Y'));
     $currentMonth = intval(date('n'));
 
     if ($monthNum < 1 || $monthNum > 12) {
         return ['valid' => false, 'message' => 'Invalid month (01-12)'];
+    }
+
+    if ($yearNum === null) {
+        return ['valid' => false, 'message' => 'Invalid year format (use YY or YYYY)'];
     }
 
     if ($yearNum < $currentYear) {
@@ -257,11 +291,11 @@ if (!isset($_POST["data"]) || empty($_POST["data"])) {
 
 $data = $_POST["data"];
 
-// Splitting the data - support flexible card lengths
-$pattern = "/^([\\d]{" . MIN_CARD_LENGTH . "," . MAX_CARD_LENGTH . "})\\|([\\d]{2})\\|([\\d]{4})\\|([\\d]{3,4})$/";
+// Splitting the data - support flexible card lengths and year formats (YY or YYYY)
+$pattern = "/^([\\d]{" . MIN_CARD_LENGTH . "," . MAX_CARD_LENGTH . "})\\|([\\d]{2})\\|([\\d]{2}|[\\d]{4})\\|([\\d]{3,4})$/";
 
 if (!preg_match($pattern, $data, $matches)) {
-    echo jsonResponse(4, "<div><b style='color:#ef4444;'>Invalid Format</b> | Please use format: card_number|MM|YYYY|CVV</div>");
+    echo jsonResponse(4, "<div><b style='color:#ef4444;'>Invalid Format</b> | Please use format: card_number|MM|YY|CVV or card_number|MM|YYYY|CVV</div>");
     exit;
 }
 
@@ -270,7 +304,9 @@ $expm = $matches[2];
 $expy = $matches[3];
 $cvv = $matches[4];
 
-$format = $num . "|" . $expm . "|" . $expy . "|" . $cvv;
+// Convert 2-digit year to 4-digit year for display and validation
+$fullYear = convertToFullYear($expy);
+$format = $num . "|" . $expm . "|" . $fullYear . "|" . $cvv;
 
 // Comprehensive validation
 $validation = validateCard($num, $expm, $expy, $cvv);
