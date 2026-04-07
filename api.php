@@ -1,226 +1,233 @@
 <?php
 /**
  * API Endpoint for CC Checker
- * Enhanced with robust bank algorithm validation
- * 
+ * Reworked: comprehensive BIN detection, structured JSON, additional networks
+ *
  * @author OshekharO
  */
 
-// Load configuration if available
 if (file_exists('config.php')) {
     require_once 'config.php';
 } else {
-    // Default settings if config.php doesn't exist
     define('ENABLE_LUHN_CHECK', true);
     define('MIN_CARD_LENGTH', 13);
     define('MAX_CARD_LENGTH', 19);
     define('MIN_VALID_YEAR', 2024);
 }
 
+header('Content-Type: application/json; charset=utf-8');
+
 /**
- * Card type definitions with IIN/BIN ranges
- * Based on ISO/IEC 7812 standards
+ * Card type definitions with IIN/BIN ranges (ISO/IEC 7812).
+ * Order matters: more specific patterns must appear before broad ones
+ * (e.g. Discover 622xxx before UnionPay 62xxx).
  */
 $CARD_TYPES = [
+    'mir' => [
+        'name'       => 'Mir',
+        'patterns'   => ['/^220[0-4]/'],
+        'lengths'    => [16],
+        'cvv_length' => 3,
+        'color'      => '#4CAF50',
+    ],
     'visa' => [
-        'name' => 'Visa',
-        'patterns' => ['/^4/'],
-        'lengths' => [13, 16, 19],
-        'cvv_length' => 3
+        'name'       => 'Visa',
+        'patterns'   => ['/^4/'],
+        'lengths'    => [13, 16, 19],
+        'cvv_length' => 3,
+        'color'      => '#1434CB',
     ],
     'mastercard' => [
-        'name' => 'Mastercard',
-        'patterns' => ['/^5[1-5]/', '/^2(?:2[2-9][1-9]|2[3-9]|[3-6]|7[0-1]|720)/'],
-        'lengths' => [16],
-        'cvv_length' => 3
+        'name'       => 'Mastercard',
+        // 5-series: 51–55; 2-series: 222100–272099
+        'patterns'   => [
+            '/^5[1-5]/',
+            '/^2(?:2(?:2[1-9]|[3-9]\d)|[3-6]\d\d|7(?:[01]\d|20))/',
+        ],
+        'lengths'    => [16],
+        'cvv_length' => 3,
+        'color'      => '#EB001B',
     ],
     'amex' => [
-        'name' => 'American Express',
-        'patterns' => ['/^3[47]/'],
-        'lengths' => [15],
-        'cvv_length' => 4
+        'name'       => 'American Express',
+        'patterns'   => ['/^3[47]/'],
+        'lengths'    => [15],
+        'cvv_length' => 4,
+        'color'      => '#007B5E',
     ],
     'discover' => [
-        'name' => 'Discover',
-        'patterns' => ['/^6(?:011|5|4[4-9]|22(?:1(?:2[6-9]|[3-9])|[2-8]|9(?:[01]|2[0-5])))/'],
-        'lengths' => [16, 19],
-        'cvv_length' => 3
+        'name'       => 'Discover',
+        'patterns'   => [
+            '/^6011/',
+            '/^65/',
+            '/^64[4-9]/',
+            // Discover-branded UnionPay co-branded range
+            '/^622(?:1(?:2[6-9]|[3-9]\d)|[2-8]\d\d|9(?:[01]\d|2[0-5]))/',
+        ],
+        'lengths'    => [16, 19],
+        'cvv_length' => 3,
+        'color'      => '#FF6600',
     ],
     'diners' => [
-        'name' => 'Diners Club',
-        'patterns' => ['/^3(?:0[0-5]|[68])/'],
-        'lengths' => [14, 16, 19],
-        'cvv_length' => 3
+        'name'       => 'Diners Club',
+        'patterns'   => ['/^3(?:0[0-5]|[68])/'],
+        'lengths'    => [14, 16, 19],
+        'cvv_length' => 3,
+        'color'      => '#004A97',
     ],
     'jcb' => [
-        'name' => 'JCB',
-        'patterns' => ['/^(?:2131|1800|35)/'],
-        'lengths' => [16, 17, 18, 19],
-        'cvv_length' => 3
-    ],
-    'unionpay' => [
-        'name' => 'UnionPay',
-        'patterns' => ['/^62/'],
-        'lengths' => [16, 17, 18, 19],
-        'cvv_length' => 3
+        'name'       => 'JCB',
+        'patterns'   => ['/^(?:2131|1800|35)/'],
+        'lengths'    => [16, 17, 18, 19],
+        'cvv_length' => 3,
+        'color'      => '#003087',
     ],
     'maestro' => [
-        'name' => 'Maestro',
-        'patterns' => ['/^(?:5018|5020|5038|5893|6304|6759|676[1-3])/'],
-        'lengths' => [12, 13, 14, 15, 16, 17, 18, 19],
-        'cvv_length' => 3
-    ]
+        'name'       => 'Maestro',
+        'patterns'   => ['/^(?:5018|5020|5038|5893|6304|6759|676[1-3])/'],
+        'lengths'    => [12, 13, 14, 15, 16, 17, 18, 19],
+        'cvv_length' => 3,
+        'color'      => '#009BDE',
+    ],
+    'troy' => [
+        'name'       => 'Troy',
+        'patterns'   => ['/^9792/'],
+        'lengths'    => [16],
+        'cvv_length' => 3,
+        'color'      => '#E63946',
+    ],
+    'unionpay' => [
+        'name'       => 'UnionPay',
+        'patterns'   => ['/^62/'],
+        'lengths'    => [16, 17, 18, 19],
+        'cvv_length' => 3,
+        'color'      => '#CC0000',
+    ],
 ];
 
 /**
- * Validate card number using Luhn algorithm (ISO/IEC 7812-1)
- * @param string $number Card number (digits only)
- * @return bool True if valid
+ * Luhn algorithm (ISO/IEC 7812-1).
  */
-function validateLuhn($number) {
+function validateLuhn(string $number): bool
+{
     $number = preg_replace('/\D/', '', $number);
-    
-    if (empty($number)) {
+    if ($number === '') {
         return false;
     }
-    
-    $sum = 0;
+
+    $sum    = 0;
     $length = strlen($number);
-    
+
     for ($i = $length - 1; $i >= 0; $i--) {
-        $digit = intval($number[$i]);
-        
-        if (($length - $i) % 2 == 0) {
+        $digit = (int) $number[$i];
+        if (($length - $i) % 2 === 0) {
             $digit *= 2;
             if ($digit > 9) {
                 $digit -= 9;
             }
         }
-        
         $sum += $digit;
     }
-    
+
     return ($sum % 10) === 0;
 }
 
 /**
- * Detect card type based on IIN/BIN ranges
- * @param string $number Card number
- * @return array|null Card type info or null
+ * Detect card network from IIN/BIN prefix.
  */
-function detectCardType($number) {
+function detectCardType(string $number): ?array
+{
     global $CARD_TYPES;
-    $cleanNumber = preg_replace('/\D/', '', $number);
-    
-    foreach ($CARD_TYPES as $key => $cardType) {
-        foreach ($cardType['patterns'] as $pattern) {
-            if (preg_match($pattern, $cleanNumber)) {
-                return array_merge(['key' => $key], $cardType);
+    $clean = preg_replace('/\D/', '', $number);
+
+    foreach ($CARD_TYPES as $key => $type) {
+        foreach ($type['patterns'] as $pattern) {
+            if (preg_match($pattern, $clean)) {
+                return array_merge(['key' => $key], $type);
             }
         }
     }
-    
+
     return null;
 }
 
 /**
- * Validate card length based on card type
- * @param string $number Card number
- * @param array|null $cardType Card type info
- * @return bool True if length is valid
+ * Validate card number length against known lengths for its network.
  */
-function isValidLength($number, $cardType) {
-    $cleanNumber = preg_replace('/\D/', '', $number);
-    $length = strlen($cleanNumber);
-    
+function isValidLength(string $number, ?array $cardType): bool
+{
+    $len = strlen(preg_replace('/\D/', '', $number));
+
     if ($cardType === null) {
-        // Generic validation: 13-19 digits
-        return $length >= MIN_CARD_LENGTH && $length <= MAX_CARD_LENGTH;
+        return $len >= MIN_CARD_LENGTH && $len <= MAX_CARD_LENGTH;
     }
-    
-    return in_array($length, $cardType['lengths']);
+
+    return in_array($len, $cardType['lengths'], true);
 }
 
 /**
- * Validate CVV based on card type
- * @param string $cvv CVV code
- * @param array|null $cardType Card type info
- * @return bool True if CVV is valid
+ * Validate CVV digit count against expected length for the card network.
  */
-function isValidCVV($cvv, $cardType) {
+function isValidCVV(string $cvv, ?array $cardType): bool
+{
     if (!preg_match('/^\d+$/', $cvv)) {
         return false;
     }
-    
-    $cvvLength = strlen($cvv);
-    
+
+    $len = strlen($cvv);
+
     if ($cardType === null) {
-        // Allow 3 or 4 digits for unknown card types
-        return $cvvLength === 3 || $cvvLength === 4;
+        return $len === 3 || $len === 4;
     }
-    
-    return $cvvLength === $cardType['cvv_length'];
+
+    return $len === $cardType['cvv_length'];
 }
 
 /**
- * Convert 2-digit year (YY) to 4-digit year (YYYY)
- * Uses current century for credit card expiry (cards valid for ~10 years)
- * @param string $year Year string (2 or 4 digits)
- * @return int|null Full 4-digit year, or null if invalid
+ * Normalise a 2- or 4-digit year to a full 4-digit year.
  */
-function convertToFullYear($year) {
-    // Validate that year contains only digits
+function convertToFullYear(string $year): ?int
+{
     if (!preg_match('/^\d+$/', $year)) {
         return null;
     }
-    
-    $yearNum = intval($year);
-    $yearLen = strlen($year);
-    
-    // If already 4 digits, return as-is
-    if ($yearLen === 4) {
-        return $yearNum;
+
+    $num = (int) $year;
+    $len = strlen($year);
+
+    if ($len === 4) {
+        return $num;
     }
-    
-    // For 2-digit year: add current century
-    // Credit cards typically have expiry within 10 years, so 2000s is safe
-    if ($yearLen === 2) {
-        return 2000 + $yearNum;
+
+    if ($len === 2) {
+        return 2000 + $num;
     }
-    
-    // Invalid length (not 2 or 4 digits)
+
     return null;
 }
 
 /**
- * Validate expiry date
- * @param string $month Expiry month (MM)
- * @param string $year Expiry year (YY or YYYY)
- * @return array Validation result with 'valid' and 'message'
+ * Validate card expiry date.
  */
-function validateExpiry($month, $year) {
-    $monthNum = intval($month);
-    $yearNum = convertToFullYear($year);
-    $currentYear = intval(date('Y'));
-    $currentMonth = intval(date('n'));
+function validateExpiry(string $month, string $year): array
+{
+    $monthNum     = (int) $month;
+    $yearNum      = convertToFullYear($year);
+    $currentYear  = (int) date('Y');
+    $currentMonth = (int) date('n');
 
     if ($monthNum < 1 || $monthNum > 12) {
         return ['valid' => false, 'message' => 'Invalid month (01-12)'];
     }
 
     if ($yearNum === null) {
-        return ['valid' => false, 'message' => 'Invalid year format (use YY or YYYY)'];
+        return ['valid' => false, 'message' => 'Invalid year format'];
     }
 
-    if ($yearNum < $currentYear) {
-        return ['valid' => false, 'message' => 'Card expired (year)'];
+    if ($yearNum < $currentYear || ($yearNum === $currentYear && $monthNum < $currentMonth)) {
+        return ['valid' => false, 'message' => 'Card expired'];
     }
 
-    if ($yearNum === $currentYear && $monthNum < $currentMonth) {
-        return ['valid' => false, 'message' => 'Card expired (month)'];
-    }
-
-    // Cards typically valid for 3-5 years, flag suspicious if too far
     if ($yearNum > $currentYear + 10) {
         return ['valid' => false, 'message' => 'Expiry year too far in future'];
     }
@@ -229,108 +236,140 @@ function validateExpiry($month, $year) {
 }
 
 /**
- * Comprehensive card validation
- * @param string $number Card number
- * @param string $month Expiry month
- * @param string $year Expiry year
- * @param string $cvv CVV code
- * @return array Validation result
+ * Run all validation checks and return a combined result.
  */
-function validateCard($number, $month, $year, $cvv) {
-    $cleanNumber = preg_replace('/\D/', '', $number);
-    $cardType = detectCardType($cleanNumber);
-    $errors = [];
-    
-    // Validate card number length
-    if (!isValidLength($cleanNumber, $cardType)) {
-        $expectedLengths = $cardType 
-            ? implode(', ', $cardType['lengths'])
+function validateCard(string $number, string $month, string $year, string $cvv): array
+{
+    $clean    = preg_replace('/\D/', '', $number);
+    $cardType = detectCardType($clean);
+    $errors   = [];
+
+    if (!isValidLength($clean, $cardType)) {
+        $expected = $cardType
+            ? implode(' or ', $cardType['lengths'])
             : (MIN_CARD_LENGTH . '-' . MAX_CARD_LENGTH);
-        $errors[] = "Invalid length (expected: {$expectedLengths} digits)";
+        $errors[] = "Invalid length (expected: {$expected})";
     }
-    
-    // Validate Luhn algorithm
-    if (defined('ENABLE_LUHN_CHECK') && ENABLE_LUHN_CHECK && !validateLuhn($cleanNumber)) {
+
+    if (defined('ENABLE_LUHN_CHECK') && ENABLE_LUHN_CHECK && !validateLuhn($clean)) {
         $errors[] = 'Failed Luhn checksum';
     }
-    
-    // Validate expiry
-    $expiryResult = validateExpiry($month, $year);
-    if (!$expiryResult['valid']) {
-        $errors[] = $expiryResult['message'];
+
+    $expiry = validateExpiry($month, $year);
+    if (!$expiry['valid']) {
+        $errors[] = $expiry['message'];
     }
-    
-    // Validate CVV
+
     if (!isValidCVV($cvv, $cardType)) {
-        $expectedCvv = $cardType ? $cardType['cvv_length'] : '3-4';
-        $errors[] = "Invalid CVV (expected: {$expectedCvv} digits)";
+        $expected = $cardType ? $cardType['cvv_length'] : '3-4';
+        $errors[] = "Invalid CVV (expected: {$expected} digits)";
     }
-    
+
     return [
-        'valid' => empty($errors),
+        'valid'     => empty($errors),
         'card_type' => $cardType,
-        'errors' => $errors
+        'errors'    => $errors,
     ];
 }
 
-/**
- * Create JSON response
- * @param int $errorCode Error code (1=live, 2=die, 3=unknown, 4=info)
- * @param string $message Message to display
- * @return string JSON string
- */
-function jsonResponse($errorCode, $message) {
-    return json_encode(['error' => $errorCode, 'msg' => $message]);
-}
+// ──────────────────────────────────────────────────────────────
+// Request handling
+// ──────────────────────────────────────────────────────────────
 
-// Getting posted data
-if (!isset($_POST["data"]) || empty($_POST["data"])) {
-    echo jsonResponse(4, "<div><b style='color:#ef4444;'>Error</b> | No data provided</div>");
+if (empty($_POST['data'])) {
+    echo json_encode([
+        'error'   => 4,
+        'status'  => 'error',
+        'network' => '',
+        'color'   => '',
+        'card'    => '',
+        'message' => 'No data provided',
+        'msg'     => 'No data provided',
+    ]);
     exit;
 }
 
-$data = $_POST["data"];
+$data = trim($_POST['data']);
 
-// Splitting the data - support flexible card lengths and year formats (YY or YYYY)
-$pattern = "/^([\\d]{" . MIN_CARD_LENGTH . "," . MAX_CARD_LENGTH . "})\\|([\\d]{2})\\|([\\d]{2}|[\\d]{4})\\|([\\d]{3,4})$/";
+$pattern = '/^([\d]{' . MIN_CARD_LENGTH . ',' . MAX_CARD_LENGTH . '})\|([\d]{2})\|([\d]{2}|[\d]{4})\|([\d]{3,4})$/';
 
 if (!preg_match($pattern, $data, $matches)) {
-    echo jsonResponse(4, "<div><b style='color:#ef4444;'>Invalid Format</b> | Please use format: card_number|MM|YY|CVV or card_number|MM|YYYY|CVV</div>");
+    echo json_encode([
+        'error'   => 4,
+        'status'  => 'error',
+        'network' => '',
+        'color'   => '',
+        'card'    => '',
+        'message' => 'Invalid format — use: CardNumber|MM|YY|CVV',
+        'msg'     => 'Invalid format — use: CardNumber|MM|YY|CVV',
+    ]);
     exit;
 }
 
-$num = $matches[1];
+$num  = $matches[1];
 $expm = $matches[2];
 $expy = $matches[3];
-$cvv = $matches[4];
+$cvv  = $matches[4];
 
-// Convert 2-digit year to 4-digit year for display and validation
-$fullYear = convertToFullYear($expy);
-$format = $num . "|" . $expm . "|" . $fullYear . "|" . $cvv;
-
-// Comprehensive validation
+$fullYear   = convertToFullYear($expy);
+$format     = "{$num}|{$expm}|{$fullYear}|{$cvv}";
 $validation = validateCard($num, $expm, $expy, $cvv);
-$cardTypeName = $validation['card_type'] ? $validation['card_type']['name'] : 'Unknown';
+
+$cardTypeName = $validation['card_type'] ? $validation['card_type']['name']  : 'Unknown';
+$cardColor    = $validation['card_type'] ? $validation['card_type']['color'] : '#a0a3b1';
+$cardKey      = $validation['card_type'] ? $validation['card_type']['key']   : '';
 
 if (!$validation['valid']) {
-    $errorMsg = implode(', ', $validation['errors']);
-    echo jsonResponse(2, "<div><b style='color:#ef4444;'>Die</b> <span style='opacity:0.7;font-size:11px;'>({$cardTypeName})</span> | {$format} | {$errorMsg}</div>");
+    $errorMsg = implode(' • ', $validation['errors']);
+    echo json_encode([
+        'error'   => 2,
+        'status'  => 'die',
+        'network' => $cardTypeName,
+        'color'   => $cardColor,
+        'key'     => $cardKey,
+        'card'    => $format,
+        'message' => $errorMsg,
+        'msg'     => "<div><b style='color:#ef4444;'>Die</b> | {$format} | {$errorMsg}</div>",
+    ]);
     exit;
 }
 
-// Card passed all validation checks
-// In a real application, you would integrate with a payment gateway here
-// For demo purposes, we simulate random results
+// Simulate payment-gateway response.
+// Replace this block with real gateway integration.
 $rand = rand(1, 10);
 
 if ($rand <= 3) {
-    // 30% chance of Live
-    echo jsonResponse(1, "<div><b style='color:#10b981;'>Live</b> <span style='opacity:0.7;font-size:11px;'>({$cardTypeName})</span> | {$format} | \$0.5 Charged - OshekharO</div>");
+    echo json_encode([
+        'error'   => 1,
+        'status'  => 'live',
+        'network' => $cardTypeName,
+        'color'   => $cardColor,
+        'key'     => $cardKey,
+        'card'    => $format,
+        'message' => '$0.5 Auth',
+        'msg'     => "<div><b style='color:#10b981;'>Live</b> | {$format} | \$0.5 Auth</div>",
+    ]);
 } elseif ($rand <= 8) {
-    // 50% chance of Die
-    echo jsonResponse(2, "<div><b style='color:#ef4444;'>Die</b> <span style='opacity:0.7;font-size:11px;'>({$cardTypeName})</span> | {$format} | Declined - OshekharO</div>");
+    echo json_encode([
+        'error'   => 2,
+        'status'  => 'die',
+        'network' => $cardTypeName,
+        'color'   => $cardColor,
+        'key'     => $cardKey,
+        'card'    => $format,
+        'message' => 'Declined',
+        'msg'     => "<div><b style='color:#ef4444;'>Die</b> | {$format} | Declined</div>",
+    ]);
 } else {
-    // 20% chance of Unknown
-    echo jsonResponse(3, "<div><b style='color:#f59e0b;'>Unknown</b> <span style='opacity:0.7;font-size:11px;'>({$cardTypeName})</span> | {$format} | Gateway timeout - OshekharO</div>");
+    echo json_encode([
+        'error'   => 3,
+        'status'  => 'unknown',
+        'network' => $cardTypeName,
+        'color'   => $cardColor,
+        'key'     => $cardKey,
+        'card'    => $format,
+        'message' => 'Gateway timeout',
+        'msg'     => "<div><b style='color:#f59e0b;'>Unknown</b> | {$format} | Gateway timeout</div>",
+    ]);
 }
 ?>
