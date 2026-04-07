@@ -1,7 +1,6 @@
 <?php
 /**
  * API Endpoint for CC Checker
- * Reworked: comprehensive BIN detection, structured JSON, additional networks
  *
  * @author OshekharO
  */
@@ -12,7 +11,7 @@ if (file_exists('config.php')) {
     define('ENABLE_LUHN_CHECK', true);
     define('MIN_CARD_LENGTH', 13);
     define('MAX_CARD_LENGTH', 19);
-    define('MIN_VALID_YEAR', 2024);
+    define('MIN_VALID_YEAR', 2026);
 }
 
 header('Content-Type: application/json; charset=utf-8');
