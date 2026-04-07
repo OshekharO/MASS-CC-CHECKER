@@ -191,6 +191,14 @@
       // Based on ISO/IEC 7812 standards
       // ============================================
       const CARD_TYPES = {
+        // Mir must come before Mastercard because 2200-2204 would
+        // also match the Mastercard 2-series range.
+        mir: {
+          name: 'Mir',
+          patterns: [/^220[0-4]/],
+          lengths: [16],
+          cvvLength: 3
+        },
         visa: {
           name: 'Visa',
           patterns: [/^4/],
@@ -199,7 +207,9 @@
         },
         mastercard: {
           name: 'Mastercard',
-          patterns: [/^5[1-5]/, /^2(?:2[2-9][1-9]|2[3-9]|[3-6]|7[0-1]|720)/],
+          // 5-series: 51–55
+          // 2-series: 222100–272099 (fixed regex)
+          patterns: [/^5[1-5]/, /^2(?:2(?:2[1-9]|[3-9]\d)|[3-6]\d\d|7(?:[01]\d|20))/],
           lengths: [16],
           cvvLength: 3
         },
@@ -209,9 +219,15 @@
           lengths: [15],
           cvvLength: 4
         },
+        // Discover 622xxx must be tested before UnionPay's broad /^62/
         discover: {
           name: 'Discover',
-          patterns: [/^6(?:011|5|4[4-9]|22(?:1(?:2[6-9]|[3-9])|[2-8]|9(?:[01]|2[0-5])))/],
+          patterns: [
+            /^6011/,
+            /^65/,
+            /^64[4-9]/,
+            /^622(?:1(?:2[6-9]|[3-9]\d)|[2-8]\d\d|9(?:[01]\d|2[0-5]))/
+          ],
           lengths: [16, 19],
           cvvLength: 3
         },
@@ -227,16 +243,22 @@
           lengths: [16, 17, 18, 19],
           cvvLength: 3
         },
-        unionpay: {
-          name: 'UnionPay',
-          patterns: [/^62/],
-          lengths: [16, 17, 18, 19],
-          cvvLength: 3
-        },
         maestro: {
           name: 'Maestro',
           patterns: [/^(?:5018|5020|5038|5893|6304|6759|676[1-3])/],
           lengths: [12, 13, 14, 15, 16, 17, 18, 19],
+          cvvLength: 3
+        },
+        troy: {
+          name: 'Troy',
+          patterns: [/^9792/],
+          lengths: [16],
+          cvvLength: 3
+        },
+        unionpay: {
+          name: 'UnionPay',
+          patterns: [/^62/],
+          lengths: [16, 17, 18, 19],
           cvvLength: 3
         }
       };
