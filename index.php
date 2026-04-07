@@ -191,6 +191,14 @@
       // Based on ISO/IEC 7812 standards
       // ============================================
       const CARD_TYPES = {
+        // Mir must come before Mastercard because 2200-2204 would
+        // also match the Mastercard 2-series range.
+        mir: {
+          name: 'Mir',
+          patterns: [/^220[0-4]/],
+          lengths: [16],
+          cvvLength: 3
+        },
         visa: {
           name: 'Visa',
           patterns: [/^4/],
@@ -199,7 +207,9 @@
         },
         mastercard: {
           name: 'Mastercard',
-          patterns: [/^5[1-5]/, /^2(?:2[2-9][1-9]|2[3-9]|[3-6]|7[0-1]|720)/],
+          // 5-series: 51–55
+          // 2-series: 222100–272099 (fixed regex)
+          patterns: [/^5[1-5]/, /^2(?:2(?:2[1-9]|[3-9]\d)|[3-6]\d\d|7(?:[01]\d|20))/],
           lengths: [16],
           cvvLength: 3
         },
@@ -209,9 +219,15 @@
           lengths: [15],
           cvvLength: 4
         },
+        // Discover 622xxx must be tested before UnionPay's broad /^62/
         discover: {
           name: 'Discover',
-          patterns: [/^6(?:011|5|4[4-9]|22(?:1(?:2[6-9]|[3-9])|[2-8]|9(?:[01]|2[0-5])))/],
+          patterns: [
+            /^6011/,
+            /^65/,
+            /^64[4-9]/,
+            /^622(?:1(?:2[6-9]|[3-9]\d)|[2-8]\d\d|9(?:[01]\d|2[0-5]))/
+          ],
           lengths: [16, 19],
           cvvLength: 3
         },
@@ -227,16 +243,22 @@
           lengths: [16, 17, 18, 19],
           cvvLength: 3
         },
-        unionpay: {
-          name: 'UnionPay',
-          patterns: [/^62/],
-          lengths: [16, 17, 18, 19],
-          cvvLength: 3
-        },
         maestro: {
           name: 'Maestro',
           patterns: [/^(?:5018|5020|5038|5893|6304|6759|676[1-3])/],
           lengths: [12, 13, 14, 15, 16, 17, 18, 19],
+          cvvLength: 3
+        },
+        troy: {
+          name: 'Troy',
+          patterns: [/^9792/],
+          lengths: [16],
+          cvvLength: 3
+        },
+        unionpay: {
+          name: 'UnionPay',
+          patterns: [/^62/],
+          lengths: [16, 17, 18, 19],
           cvvLength: 3
         }
       };
@@ -328,6 +350,29 @@
         }
         
         return cvv.length === expectedLength;
+      }
+
+      /**
+       * Returns true when a CVV uses an obviously fake pattern:
+       * all-same digit (000, 666, 999 …) or monotone sequential
+       * ascending/descending (012, 123, 321, 987 …).
+       * @param {string} cvv - CVV string (digits only)
+       * @returns {boolean}
+       */
+      function isSuspiciousCVV(cvv) {
+        if (!/^\d+$/.test(cvv)) return false;
+
+        // All-same digit
+        if (/^(\d)\1+$/.test(cvv)) return true;
+
+        // Monotone sequential ascending or descending
+        let asc = true, dsc = true;
+        for (let i = 1; i < cvv.length; i++) {
+          if (cvv.charCodeAt(i) - cvv.charCodeAt(i - 1) !== 1) asc = false;
+          if (cvv.charCodeAt(i - 1) - cvv.charCodeAt(i) !== 1) dsc = false;
+          if (!asc && !dsc) break;
+        }
+        return asc || dsc;
       }
 
       /**
@@ -448,6 +493,8 @@
         if (!isValidCVV(cvv, result.cardType)) {
           const expectedCvv = result.cardType ? result.cardType.cvvLength : '3-4';
           result.errors.push(`Invalid CVV (expected: ${expectedCvv} digits)`);
+        } else if (isSuspiciousCVV(cvv)) {
+          result.errors.push('Suspicious CVV pattern (all-same or sequential digits)');
         }
 
         result.valid = result.errors.length === 0;
@@ -565,9 +612,11 @@
             return;
           }
 
-          // Send to server for additional validation
-          const response = await $.post(elements.form.attr('action'), { data: cc });
-          const jsonResponse = JSON.parse(response);
+          // Send to server for additional validation.
+          // api.php sends Content-Type: application/json, so jQuery
+          // automatically parses the response into a plain object.
+          // Do NOT call JSON.parse() again — that would throw.
+          const jsonResponse = await $.post(elements.form.attr('action'), { data: cc });
           
           switch (jsonResponse.error) {
             case 1:
