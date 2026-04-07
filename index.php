@@ -587,9 +587,11 @@
             return;
           }
 
-          // Send to server for additional validation
-          const response = await $.post(elements.form.attr('action'), { data: cc });
-          const jsonResponse = JSON.parse(response);
+          // Send to server for additional validation.
+          // api.php sends Content-Type: application/json, so jQuery
+          // automatically parses the response into a plain object.
+          // Do NOT call JSON.parse() again — that would throw.
+          const jsonResponse = await $.post(elements.form.attr('action'), { data: cc });
           
           switch (jsonResponse.error) {
             case 1:
