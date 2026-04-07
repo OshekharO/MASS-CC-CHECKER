@@ -375,74 +375,36 @@ function shannonEntropy(string $n): float
 }
 
 /**
- * BIN (first 6 digits) plausibility score.
- * Checks that the BIN itself is not trivially sequential/repeated.
- */
-function binPlausibility(string $n): int
-{
-    $bin = substr($n, 0, 6);
-    $score = 0;
-    if (uniqueDigitCount($bin) >= 4) $score += 10;
-    if (longestRun($bin) <= 2)       $score += 10;
-    return $score;
-}
-
-/**
- * Expiry freshness: cards that expire further in the future are more
- * likely to be "live" since they have not yet been replaced/cancelled.
- */
-function expiryFreshnessScore(string $month, string $year): int
-{
-    $yearNum      = convertToFullYear($year);
-    $currentYear  = (int) date('Y');
-    $currentMonth = (int) date('n');
-
-    if ($yearNum === null) return 0;
-
-    $monthsLeft = ($yearNum - $currentYear) * 12 + ((int)$month - $currentMonth);
-
-    if ($monthsLeft >= 30) return 15;
-    if ($monthsLeft >= 18) return 10;
-    if ($monthsLeft >= 9)  return  5;
-    if ($monthsLeft >= 3)  return  0;
-    return -10; // expires very soon
-}
-
-/**
- * Per-network baseline live-rate bias.
- * Reflects rough real-world observed ratios for demo purposes.
- */
-function networkBias(?array $cardType): int
-{
-    if ($cardType === null) return -5;
-
-    $biases = [
-        'visa'       =>  8,
-        'mastercard' =>  8,
-        'amex'       =>  6,
-        'discover'   =>  4,
-        'jcb'        =>  2,
-        'unionpay'   =>  2,
-        'maestro'    =>  0,
-        'diners'     =>  0,
-        'mir'        => -2,
-        'troy'       => -2,
-    ];
-
-    return $biases[$cardType['key']] ?? 0;
-}
-
-/**
- * Main heuristic scoring engine.
+ * Gateway-simulation scoring engine.
  *
  * Returns an associative array:
- *   'score'  (int)    0-100 — higher = more likely live
+ *   'score'  (int)    0–100 — higher = more likely live
  *   'status' (string) 'live' | 'unknown' | 'die'
  *   'reason' (string) human-readable decision message
  *
- * The score is deterministic: the same card always yields the same result.
- * Randomness is seeded from a SHA-256 of (cardNumber + secret salt) so
- * different cards get different outcomes, but repeated runs are stable.
+ * Design rationale
+ * ─────────────────
+ * Previous versions accumulated large positive bonuses (entropy, BIN
+ * plausibility, network, expiry) on top of a high base score, which
+ * caused virtually every valid-format card to reach the "live" threshold.
+ *
+ * Real payment gateways decline the vast majority of submitted card
+ * numbers (~60–70 %) because the issuer checks account existence, CVV
+ * match, velocity limits, fraud signals, and fund availability — none of
+ * which can be known locally.  To model that behaviour:
+ *
+ *   1. The PRIMARY score is a deterministic 0–99 draw derived from the
+ *      SHA-256 of the card number.  Every distinct card always gets the
+ *      same score, but the distribution is uniform across cards, giving
+ *      a realistic spread of outcomes.
+ *
+ *   2. Only *penalties* are applied on top for structurally suspicious
+ *      patterns (low entropy, long runs, too few unique digits).  Normal
+ *      cards receive no bonus — the hash alone decides them.
+ *
+ *   3. Thresholds:  live ≥ 80  (~20 %)
+ *                   unknown 60–79 (~20 %)
+ *                   die < 60  (~60 %)
  */
 function scoreCard(string $number, string $month, string $year, ?array $cardType): array
 {
@@ -475,53 +437,33 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
         ];
     }
 
-    // ── 4. Base score ────────────────────────────────────────────
-    $score = 50;
+    // ── 4. Primary score: stable pseudorandom draw from card hash ─
+    //   hexdec() of 8 hex chars gives a uint32 (0–4 294 967 295).
+    //   Modulo 100 maps it uniformly to 0–99.
+    $hash        = hash('sha256', $n . 'cc-checker-salt-v2');
+    $primaryScore = hexdec(substr($hash, 0, 8)) % 100;
 
-    // ── 5. Entropy score (real cards: ~2.8–3.1 bits/digit) ──────
+    // ── 5. Structural penalties only ────────────────────────────
+    //   No positive bonuses — the hash already distributes outcomes.
+    //   Penalties push clearly suspicious numbers further toward die.
+    $penalty = 0;
+
     $entropy = shannonEntropy($n);
-    if ($entropy >= 3.0)      $score += 18;
-    elseif ($entropy >= 2.7)  $score += 12;
-    elseif ($entropy >= 2.4)  $score +=  6;
-    elseif ($entropy >= 2.0)  $score -=  5;
-    else                      $score -= 20;
+    if ($entropy < 2.0)       $penalty += 30;   // extremely low entropy
+    elseif ($entropy < 2.5)   $penalty += 12;   // suspiciously low
 
-    // ── 6. Repeating-digit penalty ───────────────────────────────
     $run = longestRun($n);
-    if ($run >= 5)      $score -= 25;
-    elseif ($run === 4) $score -= 10;
-    elseif ($run === 3) $score -=  4;
+    if ($run >= 5)             $penalty += 25;   // long repetition (e.g. 00000)
+    elseif ($run >= 4)         $penalty += 10;
 
-    // ── 7. Unique-digit richness ─────────────────────────────────
     $uniq = uniqueDigitCount($n);
-    if ($uniq >= 8)      $score += 10;
-    elseif ($uniq >= 6)  $score +=  5;
-    elseif ($uniq <= 4)  $score -= 10;
-    elseif ($uniq <= 3)  $score -= 20;
+    if ($uniq <= 3)            $penalty += 25;   // too few distinct digits
+    elseif ($uniq <= 5)        $penalty += 10;
 
-    // ── 8. BIN plausibility ──────────────────────────────────────
-    $score += binPlausibility($n);
+    // ── 6. Final score and decision ─────────────────────────────
+    $score = max(0, min(100, $primaryScore - $penalty));
 
-    // ── 9. Network bias ──────────────────────────────────────────
-    $score += networkBias($cardType);
-
-    // ── 10. Expiry freshness ─────────────────────────────────────
-    $score += expiryFreshnessScore($month, $year);
-
-    // ── 11. Deterministic card-specific variance (−12 to +12 points) ─
-    //        `hexdec(...) % 25` yields 0–24; subtracting 12 centres it
-    //        on 0, giving a symmetric ±12 window. SHA-256 of the card
-    //        number ensures every distinct card always gets the same
-    //        variance without relying on PHP's rand().
-    $hash   = hash('sha256', $n . 'cc-checker-salt-v2');
-    $offset = (hexdec(substr($hash, 0, 4)) % 25) - 12;
-    $score += $offset;
-
-    // ── 12. Clamp to [0, 100] ────────────────────────────────────
-    $score = max(0, min(100, $score));
-
-    // ── 13. Decision thresholds ──────────────────────────────────
-    if ($score >= 62) {
+    if ($score >= 80) {
         $reasons = [
             'Approved — $0 auth',
             'Approved — card active',
@@ -529,11 +471,11 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
             'CVV2 match — approved',
             'Approved — $1 auth',
         ];
-        $reason = $reasons[hexdec(substr($hash, 4, 2)) % count($reasons)];
+        $reason = $reasons[hexdec(substr($hash, 8, 2)) % count($reasons)];
         return ['score' => $score, 'status' => 'live', 'reason' => $reason];
     }
 
-    if ($score >= 38) {
+    if ($score >= 60) {
         $reasons = [
             'Soft decline — retry',
             'Do not honour',
@@ -543,7 +485,7 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
             'Security violation',
             'Gateway timeout',
         ];
-        $reason = $reasons[hexdec(substr($hash, 6, 2)) % count($reasons)];
+        $reason = $reasons[hexdec(substr($hash, 10, 2)) % count($reasons)];
         return ['score' => $score, 'status' => 'unknown', 'reason' => $reason];
     }
 
@@ -555,7 +497,7 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
         'Expired card on file',
         'Fraud suspicion — declined',
     ];
-    $reason = $reasons[hexdec(substr($hash, 8, 2)) % count($reasons)];
+    $reason = $reasons[hexdec(substr($hash, 12, 2)) % count($reasons)];
     return ['score' => $score, 'status' => 'die', 'reason' => $reason];
 }
 
