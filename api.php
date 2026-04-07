@@ -184,6 +184,36 @@ function isValidCVV(string $cvv, ?array $cardType): bool
 }
 
 /**
+ * Returns true when a CVV uses an obviously fake pattern that real payment
+ * gateways reject during card-data quality checks:
+ *   • All-same digit:          000, 111, 666, 999, 0000, 1111 …
+ *   • Monotone ascending run:  012, 123, 234 … 789, 0123, 1234 … 6789
+ *   • Monotone descending run: 987, 876, 765 … 210, 9876 … 2109
+ */
+function isSuspiciousCVV(string $cvv): bool
+{
+    if (!preg_match('/^\d+$/', $cvv)) {
+        return false; // non-digit issues are caught by isValidCVV
+    }
+
+    // All-same-digit: every character equals the first
+    if (preg_match('/^(\d)\1+$/', $cvv)) {
+        return true;
+    }
+
+    // Monotone sequential (ascending or descending)
+    $len = strlen($cvv);
+    $asc = true;
+    $dsc = true;
+    for ($i = 1; $i < $len; $i++) {
+        if ((int)$cvv[$i] - (int)$cvv[$i - 1] !== 1)  $asc = false;
+        if ((int)$cvv[$i - 1] - (int)$cvv[$i] !== 1)  $dsc = false;
+        if (!$asc && !$dsc) break;
+    }
+    return $asc || $dsc;
+}
+
+/**
  * Normalise a 2- or 4-digit year to a full 4-digit year.
  */
 function convertToFullYear(string $year): ?int
@@ -263,6 +293,8 @@ function validateCard(string $number, string $month, string $year, string $cvv):
     if (!isValidCVV($cvv, $cardType)) {
         $expected = $cardType ? $cardType['cvv_length'] : '3-4';
         $errors[] = "Invalid CVV (expected: {$expected} digits)";
+    } elseif (isSuspiciousCVV($cvv)) {
+        $errors[] = 'Suspicious CVV pattern (all-same or sequential digits)';
     }
 
     return [

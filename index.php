@@ -353,6 +353,29 @@
       }
 
       /**
+       * Returns true when a CVV uses an obviously fake pattern:
+       * all-same digit (000, 666, 999 …) or monotone sequential
+       * ascending/descending (012, 123, 321, 987 …).
+       * @param {string} cvv - CVV string (digits only)
+       * @returns {boolean}
+       */
+      function isSuspiciousCVV(cvv) {
+        if (!/^\d+$/.test(cvv)) return false;
+
+        // All-same digit
+        if (/^(\d)\1+$/.test(cvv)) return true;
+
+        // Monotone sequential ascending or descending
+        let asc = true, dsc = true;
+        for (let i = 1; i < cvv.length; i++) {
+          if (cvv.charCodeAt(i) - cvv.charCodeAt(i - 1) !== 1) asc = false;
+          if (cvv.charCodeAt(i - 1) - cvv.charCodeAt(i) !== 1) dsc = false;
+          if (!asc && !dsc) break;
+        }
+        return asc || dsc;
+      }
+
+      /**
        * Converts 2-digit year (YY) to 4-digit year (YYYY)
        * @param {string} year - Year string (2 or 4 digits)
        * @returns {number|null} - Full 4-digit year, or null if invalid
@@ -470,6 +493,8 @@
         if (!isValidCVV(cvv, result.cardType)) {
           const expectedCvv = result.cardType ? result.cardType.cvvLength : '3-4';
           result.errors.push(`Invalid CVV (expected: ${expectedCvv} digits)`);
+        } else if (isSuspiciousCVV(cvv)) {
+          result.errors.push('Suspicious CVV pattern (all-same or sequential digits)');
         }
 
         result.valid = result.errors.length === 0;
