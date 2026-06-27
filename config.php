@@ -21,8 +21,8 @@ define('MAX_CARD_LENGTH', 19);  // Maximum: 19 digits (some UnionPay cards)
 // Expiry Validation
 // ============================================
 
-// Cards must be valid from this year onwards
-define('MIN_VALID_YEAR', 2024);
+// Cards must be valid from this year onwards (Dynamic to prevent silent expiry bugs)
+define('MIN_VALID_YEAR', (int) date('Y'));
 
 // ============================================
 // Supported Card Types (IIN/BIN Ranges)
