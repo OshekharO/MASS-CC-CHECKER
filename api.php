@@ -11,7 +11,7 @@ if (file_exists('config.php')) {
     define('ENABLE_LUHN_CHECK', true);
     define('MIN_CARD_LENGTH', 13);
     define('MAX_CARD_LENGTH', 19);
-    define('MIN_VALID_YEAR', 2026);
+    define('MIN_VALID_YEAR', (int) date('Y'));
 }
 
 header('Content-Type: application/json; charset=utf-8');
@@ -21,7 +21,7 @@ header('Content-Type: application/json; charset=utf-8');
  * Order matters: more specific patterns must appear before broad ones
  * (e.g. Discover 622xxx before UnionPay 62xxx).
  */
-$CARD_TYPES = [
+ $CARD_TYPES = [
     'mir' => [
         'name'       => 'Mir',
         'patterns'   => ['/^220[0-4]/'],
@@ -106,29 +106,30 @@ $CARD_TYPES = [
 
 /**
  * Luhn algorithm (ISO/IEC 7812-1).
+ * Optimized: uses lookup table, character math, and explicit digit validation.
  */
 function validateLuhn(string $number): bool
 {
-    $number = preg_replace('/\D/', '', $number);
-    if ($number === '') {
+    // Strip allowed separators only
+    $number = str_replace([' ', '-'], '', $number);
+
+    if ($number === '' || !ctype_digit($number)) {
         return false;
     }
 
+    // Pre-computed doubled digit sums: 2*d, with 10..18 reduced to 1..9
+    static $doubled = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9];
+
     $sum    = 0;
     $length = strlen($number);
+    $parity = $length % 2;          
 
-    for ($i = $length - 1; $i >= 0; $i--) {
-        $digit = (int) $number[$i];
-        if (($length - $i) % 2 === 0) {
-            $digit *= 2;
-            if ($digit > 9) {
-                $digit -= 9;
-            }
-        }
-        $sum += $digit;
+    for ($i = 0; $i < $length; $i++) {
+        $d = $number[$i] - '0';     // faster than (int)$number[$i]
+        $sum += ($i % 2 === $parity) ? $doubled[$d] : $d;
     }
 
-    return ($sum % 10) === 0;
+    return $sum > 0 && ($sum % 10) === 0;
 }
 
 /**
@@ -188,8 +189,9 @@ function isValidCVV(string $cvv, ?array $cardType): bool
  *   • All-same digit:          000, 111, 666, 999, 0000, 1111 …
  *   • Monotone ascending run:  012, 123, 234 … 789, 0123, 1234 … 6789
  *   • Monotone descending run: 987, 876, 765 … 210, 9876 … 2109
+ *   • CVV is a substring of the PAN (obviously fake)
  */
-function isSuspiciousCVV(string $cvv): bool
+function isSuspiciousCVV(string $cvv, string $pan = ''): bool
 {
     if (!preg_match('/^\d+$/', $cvv)) {
         return false; // non-digit issues are caught by isValidCVV
@@ -209,7 +211,14 @@ function isSuspiciousCVV(string $cvv): bool
         if ((int)$cvv[$i - 1] - (int)$cvv[$i] !== 1)  $dsc = false;
         if (!$asc && !$dsc) break;
     }
-    return $asc || $dsc;
+    if ($asc || $dsc) return true;
+
+    // CVV must not appear inside the PAN
+    if ($pan !== '' && strpos($pan, $cvv) !== false) {
+        return true;
+    }
+
+    return false;
 }
 
 /**
@@ -244,6 +253,7 @@ function validateExpiry(string $month, string $year): array
     $yearNum      = convertToFullYear($year);
     $currentYear  = (int) date('Y');
     $currentMonth = (int) date('n');
+    $minYear      = defined('MIN_VALID_YEAR') ? MIN_VALID_YEAR : $currentYear;
 
     if ($monthNum < 1 || $monthNum > 12) {
         return ['valid' => false, 'message' => 'Invalid month (01-12)'];
@@ -253,7 +263,7 @@ function validateExpiry(string $month, string $year): array
         return ['valid' => false, 'message' => 'Invalid year format'];
     }
 
-    if ($yearNum < $currentYear || ($yearNum === $currentYear && $monthNum < $currentMonth)) {
+    if ($yearNum < $minYear || ($yearNum === $currentYear && $monthNum < $currentMonth)) {
         return ['valid' => false, 'message' => 'Card expired'];
     }
 
@@ -292,8 +302,8 @@ function validateCard(string $number, string $month, string $year, string $cvv):
     if (!isValidCVV($cvv, $cardType)) {
         $expected = $cardType ? $cardType['cvv_length'] : '3-4';
         $errors[] = "Invalid CVV (expected: {$expected} digits)";
-    } elseif (isSuspiciousCVV($cvv)) {
-        $errors[] = 'Suspicious CVV pattern (all-same or sequential digits)';
+    } elseif (isSuspiciousCVV($cvv, $clean)) {
+        $errors[] = 'Suspicious CVV pattern (all-same, sequential, or found in card number)';
     }
 
     return [
@@ -309,10 +319,9 @@ function validateCard(string $number, string $month, string $year, string $cvv):
 
 /**
  * Well-known test / dummy card numbers that should always fail.
- * Sources: Stripe docs, PayPal sandbox, Braintree, Adyen, and
- * other public payment-gateway sandbox documentation.
+ * Deduplicated list.
  */
-const TEST_CARDS = [
+ $TEST_CARDS_LIST = [
     // Visa
     '4111111111111111', '4242424242424242', '4000056655665556',
     '4000000000000002', '4000000000000069', '4000000000000127',
@@ -331,7 +340,7 @@ const TEST_CARDS = [
     '5425233430109903', '2222420000001113', '2223000048400011',
     // Amex
     '378282246310005',  '371449635398431',  '378734493671000',
-    '370000000000002',  '378282246310005',  '371449635398431',
+    '370000000000002',
     // Discover
     '6011111111111117', '6011000990139424', '6011981111111113',
     '6011000000000004',
@@ -349,6 +358,9 @@ const TEST_CARDS = [
     '7777777777777777', '8888888888888888', '9999999999999999',
     '0000000000000000',
 ];
+
+// Flip to set for O(1) isset() lookup
+ $TEST_CARD_SET = array_flip($TEST_CARDS_LIST);
 
 /**
  * Count unique digits in a string of digits.
@@ -407,42 +419,15 @@ function shannonEntropy(string $n): float
 
 /**
  * Gateway-simulation scoring engine.
- *
- * Returns an associative array:
- *   'score'  (int)    0–100 — higher = more likely live
- *   'status' (string) 'live' | 'unknown' | 'die'
- *   'reason' (string) human-readable decision message
- *
- * Design rationale
- * ─────────────────
- * Previous versions accumulated large positive bonuses (entropy, BIN
- * plausibility, network, expiry) on top of a high base score, which
- * caused virtually every valid-format card to reach the "live" threshold.
- *
- * Real payment gateways decline the vast majority of submitted card
- * numbers (~60–70 %) because the issuer checks account existence, CVV
- * match, velocity limits, fraud signals, and fund availability — none of
- * which can be known locally.  To model that behaviour:
- *
- *   1. The PRIMARY score is a deterministic 0–99 draw derived from the
- *      SHA-256 of the card number.  Every distinct card always gets the
- *      same score, but the distribution is uniform across cards, giving
- *      a realistic spread of outcomes.
- *
- *   2. Only *penalties* are applied on top for structurally suspicious
- *      patterns (low entropy, long runs, too few unique digits).  Normal
- *      cards receive no bonus — the hash alone decides them.
- *
- *   3. Thresholds:  live ≥ 80  (~20 %)
- *                   unknown 60–79 (~20 %)
- *                   die < 60  (~60 %)
  */
 function scoreCard(string $number, string $month, string $year, ?array $cardType): array
 {
+    global $TEST_CARD_SET;
+    
     $n = preg_replace('/\D/', '', $number);
 
     // ── 1. Hard-fail: known test/sandbox cards ──────────────────
-    if (in_array($n, TEST_CARDS, true)) {
+    if (isset($TEST_CARD_SET[$n])) {
         return [
             'score'  => 0,
             'status' => 'die',
@@ -469,26 +454,23 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
     }
 
     // ── 4. Primary score: stable pseudorandom draw from card hash ─
-    //   hexdec() of 8 hex chars gives a uint32 (0–4 294 967 295).
-    //   Modulo 100 maps it uniformly to 0–99.
-    $hash        = hash('sha256', $n . 'cc-checker-salt-v2');
-    $primaryScore = hexdec(substr($hash, 0, 8)) % 100;
+    $hash         = hash('sha256', $n . 'cc-checker-salt-v2');
+    // Use intval(..., 16) for 32-bit PHP safety instead of hexdec
+    $primaryScore = intval(substr($hash, 0, 8), 16) % 100;
 
     // ── 5. Structural penalties only ────────────────────────────
-    //   No positive bonuses — the hash already distributes outcomes.
-    //   Penalties push clearly suspicious numbers further toward die.
     $penalty = 0;
 
     $entropy = shannonEntropy($n);
-    if ($entropy < 2.0)       $penalty += 30;   // extremely low entropy
-    elseif ($entropy < 2.5)   $penalty += 12;   // suspiciously low
+    if ($entropy < 2.0)       $penalty += 30;   
+    elseif ($entropy < 2.5)   $penalty += 12;   
 
     $run = longestRun($n);
-    if ($run >= 5)             $penalty += 25;   // long repetition (e.g. 00000)
+    if ($run >= 5)             $penalty += 25;   
     elseif ($run >= 4)         $penalty += 10;
 
     $uniq = uniqueDigitCount($n);
-    if ($uniq <= 3)            $penalty += 25;   // too few distinct digits
+    if ($uniq <= 3)            $penalty += 25;   
     elseif ($uniq <= 5)        $penalty += 10;
 
     // ── 6. Final score and decision ─────────────────────────────
@@ -502,7 +484,7 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
             'CVV2 match — approved',
             'Approved — $1 auth',
         ];
-        $reason = $reasons[hexdec(substr($hash, 8, 2)) % count($reasons)];
+        $reason = $reasons[intval(substr($hash, 8, 2), 16) % count($reasons)];
         return ['score' => $score, 'status' => 'live', 'reason' => $reason];
     }
 
@@ -516,7 +498,7 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
             'Security violation',
             'Gateway timeout',
         ];
-        $reason = $reasons[hexdec(substr($hash, 10, 2)) % count($reasons)];
+        $reason = $reasons[intval(substr($hash, 10, 2), 16) % count($reasons)];
         return ['score' => $score, 'status' => 'unknown', 'reason' => $reason];
     }
 
@@ -528,7 +510,7 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
         'Expired card on file',
         'Fraud suspicion — declined',
     ];
-    $reason = $reasons[hexdec(substr($hash, 12, 2)) % count($reasons)];
+    $reason = $reasons[intval(substr($hash, 12, 2), 16) % count($reasons)];
     return ['score' => $score, 'status' => 'die', 'reason' => $reason];
 }
 
@@ -549,9 +531,10 @@ if (empty($_POST['data'])) {
     exit;
 }
 
-$data = trim($_POST['data']);
+ $data = trim($_POST['data']);
 
-$pattern = '/^([\d]{' . MIN_CARD_LENGTH . ',' . MAX_CARD_LENGTH . '})\|([\d]{2})\|([\d]{2}|[\d]{4})\|([\d]{3,4})$/';
+// Strictest pattern: longest-first year match to prevent partial matching bugs
+ $pattern = '/^(\d{' . MIN_CARD_LENGTH . ',' . MAX_CARD_LENGTH . '})\|(\d{2})\|(\d{4}|\d{2})\|(\d{3,4})$/';
 
 if (!preg_match($pattern, $data, $matches)) {
     echo json_encode([
@@ -566,18 +549,18 @@ if (!preg_match($pattern, $data, $matches)) {
     exit;
 }
 
-$num  = $matches[1];
-$expm = $matches[2];
-$expy = $matches[3];
-$cvv  = $matches[4];
+ $num  = $matches[1];
+ $expm = $matches[2];
+ $expy = $matches[3];
+ $cvv  = $matches[4];
 
-$fullYear   = convertToFullYear($expy);
-$format     = "{$num}|{$expm}|{$fullYear}|{$cvv}";
-$validation = validateCard($num, $expm, $expy, $cvv);
+ $fullYear   = convertToFullYear($expy);
+ $format     = "{$num}|{$expm}|{$fullYear}|{$cvv}";
+ $validation = validateCard($num, $expm, $expy, $cvv);
 
-$cardTypeName = $validation['card_type'] ? $validation['card_type']['name']  : 'Unknown';
-$cardColor    = $validation['card_type'] ? $validation['card_type']['color'] : '#a0a3b1';
-$cardKey      = $validation['card_type'] ? $validation['card_type']['key']   : '';
+ $cardTypeName = $validation['card_type'] ? $validation['card_type']['name']  : 'Unknown';
+ $cardColor    = $validation['card_type'] ? $validation['card_type']['color'] : '#a0a3b1';
+ $cardKey      = $validation['card_type'] ? $validation['card_type']['key']   : '';
 
 if (!$validation['valid']) {
     $errorMsg = implode(' • ', $validation['errors']);
@@ -595,7 +578,7 @@ if (!$validation['valid']) {
 }
 
 // ── Heuristic scoring engine (replaces random gateway stub) ──
-$result = scoreCard($num, $expm, $expy, $validation['card_type']);
+ $result = scoreCard($num, $expm, $expy, $validation['card_type']);
 
 switch ($result['status']) {
     case 'live':
