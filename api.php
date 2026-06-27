@@ -321,7 +321,7 @@ function validateCard(string $number, string $month, string $year, string $cvv):
  * Well-known test / dummy card numbers that should always fail.
  * Deduplicated list.
  */
- $TEST_CARDS_LIST = [
+const TEST_CARDS_RAW = [
     // Visa
     '4111111111111111', '4242424242424242', '4000056655665556',
     '4000000000000002', '4000000000000069', '4000000000000127',
@@ -360,7 +360,7 @@ function validateCard(string $number, string $month, string $year, string $cvv):
 ];
 
 // Flip to set for O(1) isset() lookup
- $TEST_CARD_SET = array_flip($TEST_CARDS_LIST);
+ $TEST_CARD_SET = array_flip(TEST_CARDS_RAW);
 
 /**
  * Count unique digits in a string of digits.
@@ -533,8 +533,8 @@ if (empty($_POST['data'])) {
 
  $data = trim($_POST['data']);
 
-// Strictest pattern: longest-first year match to prevent partial matching bugs
- $pattern = '/^(\d{' . MIN_CARD_LENGTH . ',' . MAX_CARD_LENGTH . '})\|(\d{2})\|(\d{4}|\d{2})\|(\d{3,4})$/';
+// Strictest pattern: enforces month 01-12 and longest-first year match
+ $pattern = '/^(\d{' . MIN_CARD_LENGTH . ',' . MAX_CARD_LENGTH . '})\|(0[1-9]|1[0-2])\|(\d{4}|\d{2})\|(\d{3,4})$/';
 
 if (!preg_match($pattern, $data, $matches)) {
     echo json_encode([
@@ -571,6 +571,7 @@ if (!$validation['valid']) {
         'color'   => $cardColor,
         'key'     => $cardKey,
         'card'    => $format,
+        'score'   => 0,
         'message' => $errorMsg,
         'msg'     => "<div><b style='color:#ef4444;'>Die</b> | {$format} | {$errorMsg}</div>",
     ]);
@@ -580,46 +581,35 @@ if (!$validation['valid']) {
 // ── Heuristic scoring engine (replaces random gateway stub) ──
  $result = scoreCard($num, $expm, $expy, $validation['card_type']);
 
-switch ($result['status']) {
-    case 'live':
-        echo json_encode([
-            'error'   => 1,
-            'status'  => 'live',
-            'network' => $cardTypeName,
-            'color'   => $cardColor,
-            'key'     => $cardKey,
-            'card'    => $format,
-            'score'   => $result['score'],
-            'message' => $result['reason'],
-            'msg'     => "<div><b style='color:#10b981;'>Live</b> <span style='opacity:0.7;font-size:11px;'>({$cardTypeName})</span> | {$format} | {$result['reason']}</div>",
-        ]);
-        break;
+ $statusColor = [
+    'live'    => '#10b981',
+    'unknown' => '#f59e0b',
+    'die'     => '#ef4444'
+];
+ $statusLabel = [
+    'live'    => 'Live',
+    'unknown' => 'Unknown',
+    'die'     => 'Die'
+];
+ $errorCode = [
+    'live'    => 1,
+    'unknown' => 3,
+    'die'     => 2
+];
 
-    case 'unknown':
-        echo json_encode([
-            'error'   => 3,
-            'status'  => 'unknown',
-            'network' => $cardTypeName,
-            'color'   => $cardColor,
-            'key'     => $cardKey,
-            'card'    => $format,
-            'score'   => $result['score'],
-            'message' => $result['reason'],
-            'msg'     => "<div><b style='color:#f59e0b;'>Unknown</b> <span style='opacity:0.7;font-size:11px;'>({$cardTypeName})</span> | {$format} | {$result['reason']}</div>",
-        ]);
-        break;
+ $status = $result['status'];
+ $color  = $statusColor[$status];
+ $label  = $statusLabel[$status];
 
-    default: // 'die'
-        echo json_encode([
-            'error'   => 2,
-            'status'  => 'die',
-            'network' => $cardTypeName,
-            'color'   => $cardColor,
-            'key'     => $cardKey,
-            'card'    => $format,
-            'score'   => $result['score'],
-            'message' => $result['reason'],
-            'msg'     => "<div><b style='color:#ef4444;'>Die</b> <span style='opacity:0.7;font-size:11px;'>({$cardTypeName})</span> | {$format} | {$result['reason']}</div>",
-        ]);
-}
+echo json_encode([
+    'error'   => $errorCode[$status],
+    'status'  => $status,
+    'network' => $cardTypeName,
+    'color'   => $cardColor,
+    'key'     => $cardKey,
+    'card'    => $format,
+    'score'   => $result['score'],
+    'message' => $result['reason'],
+    'msg'     => "<div><b style='color:{$color};'>{$label}</b> <span style='opacity:0.7;font-size:11px;'>({$cardTypeName})</span> | {$format} | {$result['reason']}</div>",
+], JSON_UNESCAPED_SLASHES);
 ?>
