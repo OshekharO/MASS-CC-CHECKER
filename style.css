@@ -17,8 +17,8 @@
   --accent-warning: #f59e0b;
   --accent-info: #3b82f6;
   --border-radius: 12px;
-  --transition-fast: 0.2s ease;
-  --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: 200ms ease;
+  --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.15);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.2);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.25);
@@ -39,6 +39,9 @@ body {
   position: relative;
   margin: 0;
   padding: 1.5rem;
+  text-rendering: optimizeLegibility; /* Crisper font rendering */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Container for centered layout */
@@ -97,6 +100,7 @@ body {
   padding: 1rem;
   resize: vertical;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  width: 100%;
 }
 
 .form-control:focus {
@@ -136,6 +140,7 @@ body {
   transition: all var(--transition-smooth);
   position: relative;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .btn::before {
@@ -264,6 +269,8 @@ body {
   font-family: 'SF Mono', Monaco, 'Courier New', monospace;
   font-size: 12px;
   line-height: 1.8;
+  scrollbar-width: thin; /* Firefox scrollbar parity */
+  scrollbar-color: rgba(255,255,255,.25) rgba(255,255,255,.05);
 }
 
 .panel-body::-webkit-scrollbar {
