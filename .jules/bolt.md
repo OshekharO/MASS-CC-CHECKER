@@ -1,3 +1,0 @@
-## 2026-09-05 - Avoid runtime array_merge and redundant regex in card network detection
-**Learning:** In PHP, calling `array_merge(['key' => $key], $type)` on every lookup in `detectCardType()` creates new array allocations on every call. Pre-defining `'key'` directly inside each configuration entry in `$CARD_TYPES` eliminates this allocation overhead. Furthermore, checking `ctype_digit($number)` prior to running `preg_replace('/\D/', '', $number)` skips PCRE regex execution when card numbers are already pure digits.
-**Action:** Always pre-include identifiers/keys in lookup tables during definition rather than merging them dynamically at runtime, and check fast scalar predicates (`ctype_digit`) before invoking regular expressions.
