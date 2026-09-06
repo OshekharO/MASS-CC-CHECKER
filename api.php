@@ -23,6 +23,7 @@ header('Content-Type: application/json; charset=utf-8');
  */
  $CARD_TYPES = [
     'mir' => [
+        'key'        => 'mir',
         'name'       => 'Mir',
         'patterns'   => ['/^220[0-4]/'],
         'lengths'    => [16],
@@ -30,6 +31,7 @@ header('Content-Type: application/json; charset=utf-8');
         'color'      => '#4CAF50',
     ],
     'visa' => [
+        'key'        => 'visa',
         'name'       => 'Visa',
         'patterns'   => ['/^4/'],
         'lengths'    => [13, 16, 19],
@@ -37,6 +39,7 @@ header('Content-Type: application/json; charset=utf-8');
         'color'      => '#1434CB',
     ],
     'mastercard' => [
+        'key'        => 'mastercard',
         'name'       => 'Mastercard',
         // 5-series: 51–55; 2-series: 222100–272099
         'patterns'   => [
@@ -48,6 +51,7 @@ header('Content-Type: application/json; charset=utf-8');
         'color'      => '#EB001B',
     ],
     'amex' => [
+        'key'        => 'amex',
         'name'       => 'American Express',
         'patterns'   => ['/^3[47]/'],
         'lengths'    => [15],
@@ -55,6 +59,7 @@ header('Content-Type: application/json; charset=utf-8');
         'color'      => '#007B5E',
     ],
     'discover' => [
+        'key'        => 'discover',
         'name'       => 'Discover',
         'patterns'   => [
             '/^6011/',
@@ -68,6 +73,7 @@ header('Content-Type: application/json; charset=utf-8');
         'color'      => '#FF6600',
     ],
     'diners' => [
+        'key'        => 'diners',
         'name'       => 'Diners Club',
         'patterns'   => ['/^3(?:0[0-5]|[68])/'],
         'lengths'    => [14, 16, 19],
@@ -75,6 +81,7 @@ header('Content-Type: application/json; charset=utf-8');
         'color'      => '#004A97',
     ],
     'jcb' => [
+        'key'        => 'jcb',
         'name'       => 'JCB',
         'patterns'   => ['/^(?:2131|1800|35)/'],
         'lengths'    => [16, 17, 18, 19],
@@ -82,6 +89,7 @@ header('Content-Type: application/json; charset=utf-8');
         'color'      => '#003087',
     ],
     'maestro' => [
+        'key'        => 'maestro',
         'name'       => 'Maestro',
         'patterns'   => ['/^(?:5018|5020|5038|5893|6304|6759|676[1-3])/'],
         'lengths'    => [12, 13, 14, 15, 16, 17, 18, 19],
@@ -89,6 +97,7 @@ header('Content-Type: application/json; charset=utf-8');
         'color'      => '#009BDE',
     ],
     'troy' => [
+        'key'        => 'troy',
         'name'       => 'Troy',
         'patterns'   => ['/^9792/'],
         'lengths'    => [16],
@@ -96,6 +105,7 @@ header('Content-Type: application/json; charset=utf-8');
         'color'      => '#E63946',
     ],
     'unionpay' => [
+        'key'        => 'unionpay',
         'name'       => 'UnionPay',
         'patterns'   => ['/^62/'],
         'lengths'    => [16, 17, 18, 19],
@@ -134,16 +144,17 @@ function validateLuhn(string $number): bool
 
 /**
  * Detect card network from IIN/BIN prefix.
+ * Optimized: 'key' is pre-included in $CARD_TYPES to avoid array_merge() overhead.
  */
 function detectCardType(string $number): ?array
 {
     global $CARD_TYPES;
-    $clean = preg_replace('/\D/', '', $number);
+    $clean = ctype_digit($number) ? $number : preg_replace('/\D/', '', $number);
 
-    foreach ($CARD_TYPES as $key => $type) {
+    foreach ($CARD_TYPES as $type) {
         foreach ($type['patterns'] as $pattern) {
             if (preg_match($pattern, $clean)) {
-                return array_merge(['key' => $key], $type);
+                return $type;
             }
         }
     }
