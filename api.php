@@ -627,8 +627,59 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
         ];
     }
 
-    // ── 2. Quick check: all-same-digit (fastest rejection) ──────
-    if ($n[0] === str_repeat($n[0], $len)) {
+    // ── 2. Combined structural analysis (single pass optimization) ─
+    // Fills digit frequency array, tracks maximum run length, sequential patterns,
+    // and Markov transitions in one single loop to minimize character scans.
+    $digitFreq = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    $prevDigit = (int)$n[0];
+    $digitFreq[$prevDigit] = 1;
+
+    $maxRun = 1;
+    $currentRun = 1;
+    $seqCounter = 1; // Local counter to prevent static cross-request state pollution
+    $hasSequential = false;
+    $transitionScore = 0;
+    $prevDiff = 0;
+
+    for ($i = 1; $i < $len; $i++) {
+        $digit = (int)$n[$i];
+        $digitFreq[$digit]++;
+
+        if ($digit === $prevDigit) {
+            $currentRun++;
+            if ($currentRun > $maxRun) {
+                $maxRun = $currentRun;
+                if ($maxRun >= 6) {
+                    return [
+                        'score'  => 0,
+                        'status' => 'die',
+                        'reason' => 'Sequential digit pattern detected',
+                    ];
+                }
+            }
+            $transitionScore += 2; // Same digit repeated
+            $seqCounter = 1;
+            $prevDiff = 0;
+        } else {
+            $currentRun = 1;
+            $diff = $digit - $prevDigit;
+            if (abs($diff) === 1) {
+                $transitionScore += 1; // Sequential transition
+                $seqCounter = ($diff === $prevDiff) ? $seqCounter + 1 : 1;
+                if ($seqCounter >= 5) {
+                    $hasSequential = true;
+                }
+                $prevDiff = $diff;
+            } else {
+                $seqCounter = 1;
+                $prevDiff = 0;
+            }
+        }
+        $prevDigit = $digit;
+    }
+
+    // Rejection for all-identical-digit card numbers (fastest check)
+    if ($maxRun === $len) {
         return [
             'score'  => 0,
             'status' => 'die',
@@ -636,48 +687,6 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
         ];
     }
 
-    // ── 3. Combined structural analysis (single pass optimization) ─
-    $digitFreq = array_fill(0, 10, 0);
-    $maxRun = 1;
-    $currentRun = 1;
-    $hasSequential = false;
-    
-    for ($i = 0; $i < $len; $i++) {
-        $digit = (int)$n[$i];
-        $digitFreq[$digit]++;
-        
-        // Track consecutive runs
-        if ($i > 0) {
-            if ($n[$i] === $n[$i - 1]) {
-                $currentRun++;
-                if ($currentRun > $maxRun) {
-                    $maxRun = $currentRun;
-                    // Early exit for very long runs
-                    if ($maxRun >= 6) {
-                        return [
-                            'score'  => 0,
-                            'status' => 'die',
-                            'reason' => 'Sequential digit pattern detected',
-                        ];
-                    }
-                }
-            } else {
-                $currentRun = 1;
-            }
-            
-            // Check for sequential patterns (ascending/descending)
-            $diff = $digit - (int)$n[$i - 1];
-            if (abs($diff) === 1) {
-                // Simple heuristic: flag if we see 5+ sequential digits
-                static $seqCounter = 0;
-                $seqCounter = ($diff === ((int)$n[$i - 1] - (int)($i > 1 ? $n[$i - 2] : -1))) ? $seqCounter + 1 : 1;
-                if ($seqCounter >= 5) {
-                    $hasSequential = true;
-                }
-            }
-        }
-    }
-    
     if ($hasSequential) {
         return [
             'score'  => 0,
@@ -686,7 +695,7 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
         ];
     }
 
-    // ── 4. Count unique digits efficiently ──────────────────────
+    // ── 3. Count unique digits efficiently ──────────────────────
     $uniqueDigits = 0;
     foreach ($digitFreq as $count) {
         if ($count > 0) $uniqueDigits++;
@@ -701,7 +710,7 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
         ];
     }
 
-    // ── 4b. Benford's Law analysis ──────────────────────────────
+    // ── 4. Benford's Law analysis ──────────────────────────────
     // Real card numbers should roughly follow Benford's distribution
     // First digit should be 1-9 with specific probabilities
     $firstDigit = (int)$n[0];
@@ -717,17 +726,16 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
         $benfordPenalty += 8;
     }
 
-    // ── 5. Optimized entropy calculation (corrected formula) ────
+    // ── 5. Optimized entropy calculation (2D array cache) ──────
     // Shannon entropy: H = -Σ(p_i * log2(p_i)) where p_i = count_i / total
+    // Pre-computing 2D array [][] eliminates string key creation and formatting overhead.
     static $log2Cache = null;
     if ($log2Cache === null) {
         $log2Cache = [];
-        // Pre-compute log2 for probabilities from 1/19 to 19/19
-        for ($numerator = 1; $numerator <= 19; $numerator++) {
-            for ($denominator = 13; $denominator <= 19; $denominator++) {
-                $key = "{$numerator}/{$denominator}";
-                $p = $numerator / $denominator;
-                $log2Cache[$key] = -$p * log($p, 2);
+        for ($d = 12; $d <= 19; $d++) {
+            for ($c = 1; $c <= $d; $c++) {
+                $p = $c / $d;
+                $log2Cache[$d][$c] = -$p * log($p, 2);
             }
         }
     }
@@ -735,11 +743,9 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
     $entropy = 0.0;
     foreach ($digitFreq as $count) {
         if ($count > 0) {
-            $key = "{$count}/{$len}";
-            if (isset($log2Cache[$key])) {
-                $entropy += $log2Cache[$key];
+            if (isset($log2Cache[$len][$count])) {
+                $entropy += $log2Cache[$len][$count];
             } else {
-                // Fallback calculation for edge cases
                 $p = $count / $len;
                 $entropy -= $p * log($p, 2);
             }
@@ -750,26 +756,15 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
     $hashKey = substr(hash('sha256', $n . 'cc-checker-salt-v3'), 0, 16);
     $primaryScore = hexdec(substr($hashKey, 0, 8)) % 100;
 
-    // ── 4c. Markov chain transition analysis ────────────────────
-    // Analyze digit-to-digit transitions for unnatural patterns
-    static $transitionMatrix = null;
-    if ($transitionMatrix === null) {
-        // Expected transition frequencies (simplified model)
-        // Real cards have relatively uniform transitions
-        $transitionMatrix = array_fill(0, 10, array_fill(0, 10, 0.1));
-    }
-    
-    $transitionScore = 0;
-    $transitions = 0;
-    for ($i = 1; $i < $len; $i++) {
-        $from = (int)$n[$i - 1];
-        $to = (int)$n[$i];
-        $transitions++;
-        // Check for suspicious repeated transitions
-        if ($from === $to) {
-            $transitionScore += 2; // Same digit repeated
-        } elseif (abs($from - $to) === 1) {
-            $transitionScore += 1; // Sequential transition
+    // ── 7. Markov chain transition analysis penalty ─────────────
+    $transitions = $len - 1;
+    $transitionPenalty = 0;
+    if ($transitions > 0) {
+        $avgTransitionScore = $transitionScore / $transitions;
+        if ($avgTransitionScore > 1.5) {
+            $transitionPenalty += 20;
+        } elseif ($avgTransitionScore > 1.0) {
+            $transitionPenalty += 10;
         }
     }
     
