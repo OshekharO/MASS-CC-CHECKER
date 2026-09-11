@@ -587,9 +587,9 @@ function isTestBIN(string $bin): bool
     static $testBins = null;
     if ($testBins === null) {
         $testBins = [];
-        foreach (BIN_DATABASE as $bin => $info) {
+        foreach (BIN_DATABASE as $b => $info) {
             if ($info['type'] === 'test') {
-                $testBins[$bin] = true;
+                $testBins[$b] = true;
             }
         }
     }
@@ -758,16 +758,6 @@ function scoreCard(string $number, string $month, string $year, ?array $cardType
 
     // ── 7. Markov chain transition analysis penalty ─────────────
     $transitions = $len - 1;
-    $transitionPenalty = 0;
-    if ($transitions > 0) {
-        $avgTransitionScore = $transitionScore / $transitions;
-        if ($avgTransitionScore > 1.5) {
-            $transitionPenalty += 20;
-        } elseif ($avgTransitionScore > 1.0) {
-            $transitionPenalty += 10;
-        }
-    }
-    
     $transitionPenalty = 0;
     if ($transitions > 0) {
         $avgTransitionScore = $transitionScore / $transitions;
